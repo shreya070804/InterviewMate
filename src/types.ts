@@ -9,6 +9,11 @@ export interface UserProfile {
   createdAt?: any;
   resumeText?: string;
   optedInLeaderboard?: boolean;
+  username?: string;
+  bio?: string;
+  badges?: string[];
+  streak?: number;
+  lastStreakUpdate?: any;
 }
 
 export interface Session {
@@ -51,6 +56,7 @@ export interface Session {
     pace_assessment?: 'too fast' | 'ideal' | 'too slow';
     specific_feedback?: string;
   } | null;
+  hasObserver?: boolean;
 }
 
 export interface Question {
@@ -59,6 +65,15 @@ export interface Question {
   description: string;
   difficulty: 'Easy' | 'Medium' | 'Hard';
   category: 'DSA' | 'System Design' | 'HR' | 'Frontend';
+  embedding?: number[];
+}
+
+export interface QuestionPack {
+  id: string;
+  companyName: string;
+  companyLogo: string;
+  description: string;
+  questionIds: string[];
 }
 
 export interface Feedback {
@@ -86,6 +101,9 @@ export interface Feedback {
     top_study_topic: string;
     estimated_readiness: number;
   };
+  time_complexity?: string;
+  space_complexity?: string;
+  complexity_explanation?: string;
 }
 
 export interface SoloSession {

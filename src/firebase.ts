@@ -541,6 +541,53 @@ export const subscribeToUserSessions = (userId: string, callback: (sessions: Ses
 // QUESTIONS APIs
 // ----------------------------------------------------
 
+// Pre‑seeded Question Packs (Company‑specific)
+const QUESTION_PACKS: QuestionPack[] = [
+  {
+    id: 'pack_google',
+    companyName: 'Google',
+    companyLogo: 'https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_272x92dp.png',
+    description: 'Google‑style questions focusing on system design and algorithms.',
+    questionIds: ['q1', 'q2', 'q3', 'q4', 'q5']
+  },
+  {
+    id: 'pack_amazon',
+    companyName: 'Amazon',
+    companyLogo: 'https://upload.wikimedia.org/wikipedia/commons/a/a9/Amazon_logo.svg',
+    description: 'Amazon‑style questions emphasizing leadership principles and problem solving.',
+    questionIds: ['q6', 'q7', 'q8', 'q9', 'q10']
+  },
+  {
+    id: 'pack_startup',
+    companyName: 'Startup',
+    companyLogo: 'https://cdn-icons-png.flaticon.com/512/3063/3063696.png',
+    description: 'Startup‑style full‑stack generalist questions.',
+    questionIds: ['q11', 'q12', 'q13', 'q14', 'q15']
+  }
+];
+
+/**
+ * Fetch the curated question packs.
+ * In real mode it reads from the `question_packs` collection; in mock mode it returns the hard‑coded list.
+ */
+export const getQuestionPacks = async (): Promise<QuestionPack[]> => {
+  if (!MOCK_MODE) {
+    const collRef = collection(firestoreDb, 'question_packs');
+    const snap = await getDocs(collRef);
+    if (snap.empty) {
+      // Seed the packs on first call
+      for (const pack of QUESTION_PACKS) {
+        await setDoc(doc(firestoreDb, 'question_packs', pack.id), pack);
+      }
+      return QUESTION_PACKS;
+    }
+    return snap.docs.map(d => d.data() as QuestionPack);
+  } else {
+    // Mock mode – simply return the constant list
+    return QUESTION_PACKS;
+  }
+};
+
 export const getQuestions = async (): Promise<Question[]> => {
   if (!MOCK_MODE) {
     const collRef = collection(firestoreDb, 'questions');
