@@ -15,7 +15,10 @@ import {
   Trash2,
   Brain,
   MessageSquare,
-  AlertCircle
+  AlertCircle,
+  ArrowUp,
+  ArrowDown,
+  Minus
 } from 'lucide-react';
 
 interface Message {
@@ -44,6 +47,8 @@ export const SoloInterview: React.FC = () => {
     return 'DSA';
   });
   const [difficulty, setDifficulty] = useState<'Easy' | 'Medium' | 'Hard'>('Medium');
+  const [activeDifficulty, setActiveDifficulty] = useState<'Easy' | 'Medium' | 'Hard'>('Medium');
+  const [difficultyTrend, setDifficultyTrend] = useState<'easier' | 'same' | 'harder' | 'initial'>('initial');
 
   // Interview UI States
   const [messages, setMessages] = useState<Message[]>([]);
@@ -85,6 +90,8 @@ export const SoloInterview: React.FC = () => {
   }, [language]);
 
   const handleStartSession = async () => {
+    setActiveDifficulty(difficulty);
+    setDifficultyTrend('initial');
     setMode('interview');
     setIsStreaming(true);
     setStreamingText('');
@@ -98,6 +105,25 @@ export const SoloInterview: React.FC = () => {
     ];
 
     await getClaudeResponseStream(chatHistory.current, initialSystemPrompt);
+  };
+
+  const simulateDifficultyAssessment = (userText: string, codeText: string) => {
+    const text = userText.toLowerCase();
+    if (
+      text.includes("don't know") ||
+      text.includes("stuck") ||
+      text.includes("help") ||
+      text.includes("difficult") ||
+      text.includes("too hard") ||
+      text.includes("can't do") ||
+      userText.length < 15
+    ) {
+      return 'easier';
+    }
+    if (codeText.length > 150 && userText.length > 40) {
+      return 'harder';
+    }
+    return 'same';
   };
 
   const handleSendMessage = async (e: React.FormEvent) => {
@@ -122,7 +148,72 @@ export const SoloInterview: React.FC = () => {
     setIsStreaming(true);
     setStreamingText('');
 
-    const systemPrompt = `You are a strict but encouraging senior software engineer conducting a technical mock interview. Your name is Alex. Start by greeting the candidate, then ask one technical question based on the topic and difficulty provided. After the candidate responds, ask a relevant follow-up question or hint if they are stuck. When they submit their final code, evaluate it and give feedback. Keep responses concise — max 3 sentences per message.`;
+    let signal: 'easier' | 'same' | 'harder' = 'same';
+    const apiKey = localStorage.getItem('im_claude_key') || import.meta.env.VITE_ANTHROPIC_API_KEY || '';
+
+    if (apiKey) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+        const evalMessages = [
+          ...chatHistory.current.slice(0, -1),
+          {
+            role: 'user',
+            content: `${chatHistory.current[chatHistory.current.length - 1].content}\n\nBased on this response quality, should the next question be easier, the same, or harder? Respond with only one word: easier, same, or harder.`
+          }
+        ];
+
+        const evalResponse = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+            'content-type': 'application/json',
+            'dangerously-allow-html-user-override': 'true'
+          },
+          signal: controller.signal,
+          body: JSON.stringify({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 10,
+            messages: evalMessages
+          })
+        });
+
+        clearTimeout(timeoutId);
+
+        if (evalResponse.ok) {
+          const evalData = await evalResponse.json();
+          const evalText = evalData.content?.[0]?.text?.trim().toLowerCase() || 'same';
+          console.log('Adaptive Difficulty response:', evalText);
+          if (evalText.includes('easier')) signal = 'easier';
+          else if (evalText.includes('harder')) signal = 'harder';
+        } else {
+          console.warn('Evaluation response not OK, using simulation');
+          signal = simulateDifficultyAssessment(userText, code);
+        }
+      } catch (err) {
+        console.warn('Evaluation call failed/timed out, using simulation:', err);
+        signal = simulateDifficultyAssessment(userText, code);
+      }
+    } else {
+      signal = simulateDifficultyAssessment(userText, code);
+    }
+
+    let nextDifficulty = activeDifficulty;
+    if (signal === 'easier') {
+      if (activeDifficulty === 'Hard') nextDifficulty = 'Medium';
+      else if (activeDifficulty === 'Medium') nextDifficulty = 'Easy';
+    } else if (signal === 'harder') {
+      if (activeDifficulty === 'Easy') nextDifficulty = 'Medium';
+      else if (activeDifficulty === 'Medium') nextDifficulty = 'Hard';
+    }
+
+    console.log(`Adaptive Difficulty update: current=${activeDifficulty}, signal=${signal}, next=${nextDifficulty}`);
+    setActiveDifficulty(nextDifficulty);
+    setDifficultyTrend(signal);
+
+    const systemPrompt = `You are a strict but encouraging senior software engineer conducting a technical mock interview. Your name is Alex. The candidate is practicing on Topic: ${topic}. The current difficulty level is: ${nextDifficulty}. You must adjust the complexity of your follow-up questions, hints, and expected solution standard to match this difficulty level (${nextDifficulty}). Ask a relevant follow-up question or hint if they are stuck. When they submit their final code, evaluate it and give feedback. Keep responses concise — max 3 sentences per message.`;
 
     await getClaudeResponseStream(chatHistory.current, systemPrompt);
   };
@@ -371,7 +462,7 @@ export const SoloInterview: React.FC = () => {
       id: sessionId,
       userId: user.uid,
       topic,
-      difficulty,
+      difficulty: activeDifficulty,
       messages: transcript,
       code,
       language,
@@ -511,7 +602,17 @@ export const SoloInterview: React.FC = () => {
             <Brain className="h-4 w-4 text-brand" /> Solo Practice: Alex (AI)
           </span>
           <span className="text-[10px] uppercase font-bold tracking-widest text-slate-500 bg-slate-900 px-2 py-0.5 rounded">
-            {topic} &bull; {difficulty}
+            {topic} &bull; {activeDifficulty}
+          </span>
+          <span className="hidden sm:flex items-center gap-1.5 text-[11px] text-slate-400 bg-slate-900/60 px-2.5 py-1 rounded border border-slate-800">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span>Difficulty: adapting to your performance</span>
+            <span className="ml-1 flex items-center text-slate-300">
+              {difficultyTrend === 'harder' && <ArrowUp className="h-3.5 w-3.5 text-red-400" />}
+              {difficultyTrend === 'easier' && <ArrowDown className="h-3.5 w-3.5 text-emerald-400" />}
+              {difficultyTrend === 'same' && <Minus className="h-3.5 w-3.5 text-slate-400" />}
+              {difficultyTrend === 'initial' && <Minus className="h-3.5 w-3.5 text-slate-500" />}
+            </span>
           </span>
         </div>
 

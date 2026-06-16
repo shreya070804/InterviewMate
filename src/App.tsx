@@ -10,6 +10,7 @@ import { History } from './pages/History';
 import { Leaderboard } from './pages/Leaderboard';
 import { NotFound } from './pages/NotFound';
 import { SkillGapTracker } from './pages/SkillGapTracker';
+import { SoloInterview } from './pages/SoloInterview';
 
 function App() {
   return (
@@ -85,6 +86,16 @@ function App() {
             element={
               <ProtectedRoute requireOnboarded={true}>
                 <SkillGapTracker />
+              </ProtectedRoute>
+            } 
+          />
+
+          {/* Solo AI Interview Route */}
+          <Route 
+            path="/solo" 
+            element={
+              <ProtectedRoute requireOnboarded={true}>
+                <SoloInterview />
               </ProtectedRoute>
             } 
           />
