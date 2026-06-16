@@ -12,7 +12,8 @@ import {
   removeFromMatchmakingQueue,
   subscribeToQueueItem,
   uploadAndParseResume,
-  optInToLeaderboard
+  optInToLeaderboard,
+  getUserSoloSessions
 } from '../firebase';
 import type { Session, Feedback } from '../types';
 import { 
@@ -28,7 +29,10 @@ import {
   UserPlus, 
   MessageSquare,
   Sparkles,
-  Award, MoreHorizontal
+  Award, MoreHorizontal,
+  CheckCircle2,
+  Circle,
+  X
 } from 'lucide-react';
 
 const detectSkills = (text?: string): string[] => {
@@ -69,6 +73,20 @@ export const Dashboard: React.FC = () => {
   const [isRescheduleMode, setIsRescheduleMode] = useState(false);
   const [rescheduleSessionId, setRescheduleSessionId] = useState<string | null>(null);
 
+  // Onboarding Checklist State
+  const [soloSessionsCount, setSoloSessionsCount] = useState(0);
+  const [dismissed, setDismissed] = useState(() => {
+    return localStorage.getItem(`im_onboarding_dismissed_${user?.uid}`) === 'true';
+  });
+  const [localHasCompleted, setLocalHasCompleted] = useState(false);
+  const hasInitializedCompleted = useRef(false);
+
+  useEffect(() => {
+    if (profile && !hasInitializedCompleted.current) {
+      setLocalHasCompleted(!!profile.hasCompletedOnboarding);
+      hasInitializedCompleted.current = true;
+    }
+  }, [profile]);
 
   useEffect(() => {
     if (profile) {
@@ -165,6 +183,17 @@ export const Dashboard: React.FC = () => {
       }
     };
     fetchFeedbacks();
+
+    // Fetch user solo sessions count
+    const fetchSoloSessions = async () => {
+      try {
+        const list = await getUserSoloSessions(user.uid);
+        setSoloSessionsCount(list.length);
+      } catch (err) {
+        console.error("Failed to load solo sessions count:", err);
+      }
+    };
+    fetchSoloSessions();
 
     return () => {
       unsubscribeSessions();
@@ -348,9 +377,223 @@ export const Dashboard: React.FC = () => {
     }
   };
 
+  const profileComplete = !!profile?.onboarded;
+  const sessionScheduled = sessions.length > 0;
+  const soloAttempted = soloSessionsCount > 0;
+  const resumeUploaded = !!profile?.resumeText;
+
+  const completedCount = [profileComplete, sessionScheduled, soloAttempted, resumeUploaded].filter(Boolean).length;
+  const percentComplete = (completedCount / 4) * 100;
+
+  // Background update once complete
+  useEffect(() => {
+    if (completedCount === 4 && user && !profile?.hasCompletedOnboarding) {
+      updateProfile({ hasCompletedOnboarding: true }).catch(err => {
+        console.error("Failed to mark onboarding as completed:", err);
+      });
+    }
+  }, [completedCount, user, profile?.hasCompletedOnboarding]);
+
+  const renderOnboardingChecklist = () => {
+    if (localHasCompleted || dismissed || !user) return null;
+
+    const handleDismiss = () => {
+      localStorage.setItem(`im_onboarding_dismissed_${user.uid}`, 'true');
+      setDismissed(true);
+    };
+
+    if (completedCount === 4) {
+      return (
+        <div className="relative overflow-hidden rounded-2xl border border-indigo-500/30 dark:border-indigo-500/20 bg-slate-900 text-white p-8 shadow-xl mb-8 transition-all duration-300 transform hover:scale-[1.005]">
+          {/* Glowing background accent */}
+          <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-teal-500/20 blur-3xl pointer-events-none"></div>
+          <div className="absolute -left-10 -bottom-10 h-40 w-40 rounded-full bg-indigo-500/20 blur-3xl pointer-events-none"></div>
+
+          <div className="flex items-start justify-between relative z-10">
+            <div className="flex flex-col sm:flex-row gap-5 items-center sm:items-start text-center sm:text-left">
+              {/* Badge Icon */}
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-linear-to-br from-teal-400 to-indigo-500 p-0.5 shadow-lg shrink-0 animate-bounce">
+                <div className="flex h-full w-full items-center justify-center rounded-2xl bg-slate-900 text-teal-400">
+                  <Sparkles className="h-6 w-6 text-teal-400" />
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-xl font-extrabold tracking-tight bg-linear-to-r from-teal-300 via-emerald-400 to-indigo-300 bg-clip-text text-transparent">
+                  🎉 You're Ready to Ace Your Interviews!
+                </h3>
+                <p className="text-sm text-slate-300 mt-2 max-w-2xl leading-relaxed">
+                  Outstanding job! You've completed your onboarding checklist: your profile is complete, your first session is scheduled, you've tried solo AI practice, and your resume is uploaded. You are fully equipped to launch your mock interviews and start tracking your skill gaps!
+                </p>
+                <div className="mt-5 flex flex-wrap items-center gap-3 justify-center sm:justify-start">
+                  <button
+                    onClick={handleDismiss}
+                    className="rounded-xl bg-linear-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 text-slate-950 hover:text-black font-extrabold px-6 py-2.5 text-xs tracking-wider uppercase transition-all shadow-md hover:shadow-teal-500/20 cursor-pointer"
+                  >
+                    Start Interviewing
+                  </button>
+                  <button
+                    onClick={handleDismiss}
+                    className="rounded-xl border border-slate-700 hover:border-slate-500 hover:bg-slate-800 text-slate-300 px-5 py-2.5 text-xs font-bold transition-all cursor-pointer"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={handleDismiss}
+              className="text-slate-400 hover:text-white transition-colors cursor-pointer p-1 rounded-full hover:bg-slate-800"
+              title="Dismiss"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="relative rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-md transition-colors duration-200 mb-8 text-left">
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <h3 className="text-sm font-bold text-slate-800 dark:text-white uppercase tracking-wider">
+              Getting Started Checklist
+            </h3>
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+              Complete these 4 quick steps to fully configure your preparation workspace.
+            </p>
+          </div>
+          <button
+            onClick={handleDismiss}
+            className="text-slate-400 hover:text-slate-650 dark:hover:text-slate-200 transition-colors cursor-pointer"
+            title="Dismiss Checklist"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Progress Section */}
+        <div className="mb-6">
+          <div className="flex items-center justify-between text-xs font-semibold text-slate-600 dark:text-slate-350">
+            <span>Progress</span>
+            <span className="font-mono text-slate-500 dark:text-slate-400">{completedCount} of 4 complete</span>
+          </div>
+          <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden mt-1.5">
+            <div 
+              className="h-full bg-linear-to-r from-teal-500 to-emerald-500 transition-all duration-500 rounded-full" 
+              style={{ width: `${percentComplete}%` }}
+            ></div>
+          </div>
+        </div>
+
+        {/* Checklist Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+          {/* Step 1 */}
+          <div 
+            onClick={() => { if (!profileComplete) navigate('/onboarding'); }}
+            className={`flex items-start gap-3 p-3.5 rounded-xl border transition-all ${
+              profileComplete 
+                ? 'bg-emerald-50/40 dark:bg-emerald-950/10 border-emerald-200 dark:border-emerald-900/30 text-emerald-800 dark:text-emerald-300' 
+                : 'bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800 hover:border-slate-300 hover:bg-slate-100/30 dark:hover:bg-slate-850/30 cursor-pointer'
+            }`}
+          >
+            {profileComplete ? (
+              <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
+            ) : (
+              <Circle className="h-5 w-5 text-slate-400 dark:text-slate-600 shrink-0 mt-0.5" />
+            )}
+            <div>
+              <p className="text-xs font-bold">Complete profile</p>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">Select role and topics</p>
+            </div>
+          </div>
+
+          {/* Step 2 */}
+          <div 
+            onClick={() => { 
+              if (!sessionScheduled) {
+                setIsRescheduleMode(false);
+                setRescheduleSessionId(null);
+                setModalDate('');
+                setModalTime('');
+                setModalDuration(45);
+                setGeneratedSessionId(Math.random().toString(36).substring(2, 7) + '-' + Math.random().toString(36).substring(2, 7));
+                setIsModalOpen(true);
+              }
+            }}
+            className={`flex items-start gap-3 p-3.5 rounded-xl border transition-all ${
+              sessionScheduled 
+                ? 'bg-emerald-50/40 dark:bg-emerald-950/10 border-emerald-200 dark:border-emerald-900/30 text-emerald-800 dark:text-emerald-300' 
+                : 'bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800 hover:border-slate-300 hover:bg-slate-100/30 dark:hover:bg-slate-850/30 cursor-pointer'
+            }`}
+          >
+            {sessionScheduled ? (
+              <CheckCircle2 className="h-5 w-5 text-emerald-550 shrink-0 mt-0.5" />
+            ) : (
+              <Circle className="h-5 w-5 text-slate-400 dark:text-slate-600 shrink-0 mt-0.5" />
+            )}
+            <div>
+              <p className="text-xs font-bold">Schedule session</p>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">Book peer mock session</p>
+            </div>
+          </div>
+
+          {/* Step 3 */}
+          <div 
+            onClick={() => { if (!soloAttempted) navigate('/solo'); }}
+            className={`flex items-start gap-3 p-3.5 rounded-xl border transition-all ${
+              soloAttempted 
+                ? 'bg-emerald-50/40 dark:bg-emerald-950/10 border-emerald-200 dark:border-emerald-900/30 text-emerald-800 dark:text-emerald-300' 
+                : 'bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800 hover:border-slate-300 hover:bg-slate-100/30 dark:hover:bg-slate-850/30 cursor-pointer'
+            }`}
+          >
+            {soloAttempted ? (
+              <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
+            ) : (
+              <Circle className="h-5 w-5 text-slate-400 dark:text-slate-600 shrink-0 mt-0.5" />
+            )}
+            <div>
+              <p className="text-xs font-bold">Try solo practice</p>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">Mock interview with AI</p>
+            </div>
+          </div>
+
+          {/* Step 4 */}
+          <div 
+            onClick={() => {
+              if (!resumeUploaded) {
+                const input = document.querySelector('input[type="file"][accept=".pdf"]') as HTMLInputElement;
+                input?.click();
+              }
+            }}
+            className={`flex items-start gap-3 p-3.5 rounded-xl border transition-all ${
+              resumeUploaded 
+                ? 'bg-emerald-50/40 dark:bg-emerald-950/10 border-emerald-200 dark:border-emerald-900/30 text-emerald-800 dark:text-emerald-300' 
+                : 'bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800 hover:border-slate-300 hover:bg-slate-100/30 dark:hover:bg-slate-850/30 cursor-pointer'
+            }`}
+          >
+            {resumeUploaded ? (
+              <CheckCircle2 className="h-5 w-5 text-emerald-550 shrink-0 mt-0.5" />
+            ) : (
+              <Circle className="h-5 w-5 text-slate-400 dark:text-slate-600 shrink-0 mt-0.5" />
+            )}
+            <div>
+              <p className="text-xs font-bold">Upload resume</p>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">Extract skills from PDF</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <Layout>
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        {renderOnboardingChecklist()}
+        
         {/* Metric Cards Top Row */}
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-3 mb-8">
           {/* Metric 1 */}

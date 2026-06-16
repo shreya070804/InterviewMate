@@ -14,6 +14,7 @@ export interface UserProfile {
   badges?: string[];
   streak?: number;
   lastStreakUpdate?: any;
+  hasCompletedOnboarding?: boolean;
 }
 
 export interface Session {

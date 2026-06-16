@@ -702,6 +702,18 @@ export const saveSoloSession = async (session: any): Promise<void> => {
   }
 };
 
+export const getUserSoloSessions = async (userId: string): Promise<any[]> => {
+  if (!MOCK_MODE) {
+    const collRef = collection(firestoreDb, 'solo_sessions');
+    const q = query(collRef, where('userId', '==', userId));
+    const snap = await getDocs(q);
+    return snap.docs.map(d => d.data());
+  } else {
+    const allSolo = getLocalData('im_solo_sessions', []);
+    return allSolo.filter((s: any) => s.userId === userId);
+  }
+};
+
 export const addToMatchmakingQueue = async (userId: string, topic: string, displayName: string): Promise<string> => {
   const queueId = Math.random().toString(36).substring(2, 11);
   const queueDoc = {
