@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { saveSoloSession, saveFeedback } from '../firebase';
 import { Layout } from '../components/Layout';
@@ -28,10 +28,21 @@ interface Message {
 export const SoloInterview: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   // Mode: 'setup' | 'interview'
   const [mode, setMode] = useState<'setup' | 'interview'>('setup');
-  const [topic, setTopic] = useState<'DSA' | 'System Design' | 'Frontend' | 'HR'>('DSA');
+  const [topic, setTopic] = useState<'DSA' | 'System Design' | 'Frontend' | 'HR'>(() => {
+    const prefill = location.state?.prefillTopic;
+    if (prefill === 'DSA' || prefill === 'System Design' || prefill === 'Frontend' || prefill === 'HR') {
+      return prefill;
+    }
+    if (prefill?.toLowerCase().includes('design')) return 'System Design';
+    if (prefill?.toLowerCase().includes('frontend')) return 'Frontend';
+    if (prefill?.toLowerCase().includes('hr')) return 'HR';
+    if (prefill?.toLowerCase().includes('dsa')) return 'DSA';
+    return 'DSA';
+  });
   const [difficulty, setDifficulty] = useState<'Easy' | 'Medium' | 'Hard'>('Medium');
 
   // Interview UI States
