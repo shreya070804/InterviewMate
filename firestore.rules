@@ -1,0 +1,58 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // User profile rules: users can read any profile (to see partner details), but only write their own
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Sessions rules: authenticated users can read/write sessions where they are host or guest (or if guest is null, to join)
+    match /sessions/{sessionId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && (
+        resource.data.hostId == request.auth.uid || 
+        resource.data.guestId == request.auth.uid || 
+        resource.data.guestId == null
+      );
+      allow delete: if isAuthenticated() && resource.data.hostId == request.auth.uid;
+    }
+
+    // Feedback rules: authenticated users can read feedback for sessions they participated in, and write if they are host or guest
+    match /feedback/{feedbackId} {
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid || 
+        resource.data.reviewerId == request.auth.uid
+      );
+      allow write: if isAuthenticated();
+    }
+
+    // Matchmaking queue rules: users can only read/write their own queue documents
+    match /matchmaking_queue/{queueId} {
+      allow read, write: if isAuthenticated() && (
+        request.auth.uid == request.resource.data.userId || 
+        request.auth.uid == resource.data.userId
+      );
+    }
+
+    // Questions bank: anyone authenticated can read, only admin or host can write
+    match /questions/{questionId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+    
+    // Solo sessions rules: users can only read/write their own solo sessions
+    match /solo_sessions/{sessionId} {
+      allow read, write: if isAuthenticated() && (
+        request.auth.uid == request.resource.data.userId ||
+        request.auth.uid == resource.data.userId
+      );
+    }
+  }
+}

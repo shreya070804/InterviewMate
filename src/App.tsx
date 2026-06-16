@@ -1,0 +1,90 @@
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext';
+import { ProtectedRoute } from './components/ProtectedRoute';
+import { Auth } from './pages/Auth';
+import { Onboarding } from './pages/Onboarding';
+import { Dashboard } from './pages/Dashboard';
+import { InterviewRoom } from './pages/InterviewRoom';
+import { FeedbackDetails } from './pages/FeedbackDetails';
+import { History } from './pages/History';
+import { SoloInterview } from './pages/SoloInterview';
+import { NotFound } from './pages/NotFound';
+
+function App() {
+  return (
+    <AuthProvider>
+      <Router>
+        <Routes>
+          {/* Auth Route */}
+          <Route path="/auth" element={<Auth />} />
+
+          {/* Onboarding Route - requires auth, but not profile-onboarded */}
+          <Route 
+            path="/onboarding" 
+            element={
+              <ProtectedRoute requireOnboarded={false}>
+                <Onboarding />
+              </ProtectedRoute>
+            } 
+          />
+
+          {/* Dashboard Route */}
+          <Route 
+            path="/" 
+            element={
+              <ProtectedRoute requireOnboarded={true}>
+                <Dashboard />
+              </ProtectedRoute>
+            } 
+          />
+
+          {/* History Route */}
+          <Route 
+            path="/history" 
+            element={
+              <ProtectedRoute requireOnboarded={true}>
+                <History />
+              </ProtectedRoute>
+            } 
+          />
+
+          {/* Live Interview Room Route */}
+          <Route 
+            path="/room/:sessionId" 
+            element={
+              <ProtectedRoute requireOnboarded={true}>
+                <InterviewRoom />
+              </ProtectedRoute>
+            } 
+          />
+
+          {/* Feedback Review Route */}
+          <Route 
+            path="/feedback/:sessionId" 
+            element={
+              <ProtectedRoute requireOnboarded={true}>
+                <FeedbackDetails />
+              </ProtectedRoute>
+            } 
+          />
+
+          {/* Solo AI Interview Route */}
+          <Route 
+            path="/solo" 
+            element={
+              <ProtectedRoute requireOnboarded={true}>
+                <SoloInterview />
+              </ProtectedRoute>
+            } 
+          />
+
+          {/* Fallback Route */}
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </Router>
+    </AuthProvider>
+  );
+}
+
+export default App;
+
