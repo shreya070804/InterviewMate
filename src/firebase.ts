@@ -21,7 +21,9 @@ import {
   where, 
   getDocs,
   serverTimestamp,
-  deleteDoc
+  deleteDoc,
+  addDoc,
+  orderBy
 } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import type { UserProfile, Session, Question, Feedback, QuestionPack } from './types';
@@ -973,6 +975,73 @@ export const getWeeklyLeaderboard = async (): Promise<any[]> => {
       board = getLocalData('im_weekly_leaderboard', []);
     }
     return board;
+  }
+};
+
+export const sendChatMessage = async (
+  sessionId: string,
+  text: string,
+  senderId: string,
+  senderName: string
+): Promise<void> => {
+  if (!MOCK_MODE) {
+    const collRef = collection(firestoreDb, 'sessions', sessionId, 'messages');
+    await addDoc(collRef, {
+      text,
+      senderId,
+      senderName,
+      timestamp: serverTimestamp()
+    });
+  } else {
+    const key = `im_session_messages_${sessionId}`;
+    const messages = getLocalData(key, []);
+    messages.push({
+      id: Math.random().toString(36).substring(2, 11),
+      text,
+      senderId,
+      senderName,
+      timestamp: new Date().toISOString()
+    });
+    setLocalData(key, messages);
+    window.dispatchEvent(new Event('storage'));
+  }
+};
+
+export const subscribeToChatMessages = (
+  sessionId: string,
+  callback: (messages: any[]) => void
+) => {
+  if (!MOCK_MODE) {
+    const collRef = collection(firestoreDb, 'sessions', sessionId, 'messages');
+    const q = query(collRef, orderBy('timestamp', 'asc'));
+    return onSnapshot(q, (snap) => {
+      const msgs = snap.docs.map(d => {
+        const data = d.data();
+        return {
+          id: d.id,
+          text: data.text || '',
+          senderId: data.senderId || '',
+          senderName: data.senderName || '',
+          timestamp: data.timestamp ? (typeof data.timestamp.toDate === 'function' ? data.timestamp.toDate().toISOString() : new Date(data.timestamp).toISOString()) : new Date().toISOString()
+        };
+      });
+      callback(msgs);
+    });
+  } else {
+    const key = `im_session_messages_${sessionId}`;
+    const fetchMessages = () => {
+      const messages = getLocalData(key, []);
+      callback(messages);
+    };
+
+    fetchMessages();
+    window.addEventListener('storage', fetchMessages);
+    const intervalId = setInterval(fetchMessages, 1000);
+
+    return () => {
+      window.removeEventListener('storage', fetchMessages);
+      clearInterval(intervalId);
+    };
   }
 };
 

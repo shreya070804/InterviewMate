@@ -8,7 +8,9 @@ import {
   saveFeedback, 
   saveQuestion,
   getUserProfile,
-  MOCK_MODE
+  MOCK_MODE,
+  sendChatMessage,
+  subscribeToChatMessages
 } from '../firebase';
 import type { Session, Question, UserProfile } from '../types';
 import Editor from '@monaco-editor/react';
@@ -34,7 +36,8 @@ import {
   Trash2,
   Save,
   RotateCw,
-  Sparkles
+  Sparkles,
+  MessageSquare
 } from 'lucide-react';
 import { Excalidraw } from '@excalidraw/excalidraw';
 import "@excalidraw/excalidraw/index.css";
@@ -172,6 +175,82 @@ export const InterviewRoom: React.FC = () => {
   const [generatedQuestions, setGeneratedQuestions] = useState<Question[]>([]);
   const [genError, setGenError] = useState<string | null>(null);
   const [savedQuestionIds, setSavedQuestionIds] = useState<string[]>([]);
+
+  // Chat Sidebar States
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [chatMessages, setChatMessages] = useState<any[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const isChatOpenRef = useRef(isChatOpen);
+  const initialLoadRef = useRef(true);
+  const chatMessagesRef = useRef<any[]>([]);
+
+  // Keep refs in sync
+  useEffect(() => {
+    isChatOpenRef.current = isChatOpen;
+    if (isChatOpen) {
+      setUnreadCount(0);
+      setTimeout(() => {
+        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+    }
+  }, [isChatOpen]);
+
+  useEffect(() => {
+    chatMessagesRef.current = chatMessages;
+    if (isChatOpen) {
+      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [chatMessages, isChatOpen]);
+
+  // Subscribe to Chat messages subcollection
+  useEffect(() => {
+    if (!sessionId || !user) return;
+
+    const unsubscribeChat = subscribeToChatMessages(sessionId, (msgs) => {
+      if (initialLoadRef.current) {
+        setChatMessages(msgs);
+        initialLoadRef.current = false;
+      } else {
+        if (!isChatOpenRef.current) {
+          const currentLength = chatMessagesRef.current.length;
+          const newMsgs = msgs.slice(currentLength);
+          const incomingCount = newMsgs.filter(m => m.senderId !== user.uid).length;
+          if (incomingCount > 0) {
+            setUnreadCount(prev => prev + incomingCount);
+          }
+        }
+        setChatMessages(msgs);
+      }
+    });
+
+    return () => unsubscribeChat();
+  }, [sessionId, user?.uid]);
+
+  const handleSendChatMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chatInput.trim() || !sessionId || !user) return;
+
+    const text = chatInput.trim();
+    setChatInput('');
+
+    try {
+      const senderName = profile?.displayName || user.displayName || 'Partner';
+      await sendChatMessage(sessionId, text, user.uid, senderName);
+    } catch (err) {
+      console.error("Failed to send chat message:", err);
+    }
+  };
+
+  const formatMsgTime = (timestampStr: string): string => {
+    try {
+      const d = new Date(timestampStr);
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch (e) {
+      return '';
+    }
+  };
 
   // Load session data & Questions
   useEffect(() => {
@@ -1106,6 +1185,20 @@ export const InterviewRoom: React.FC = () => {
             </button>
           )}
 
+          {/* Chat Icon Button */}
+          <button
+            onClick={() => setIsChatOpen(!isChatOpen)}
+            className="relative p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+            title="Toggle Room Chat"
+          >
+            <MessageSquare className="h-5 w-5" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-teal-500 text-[9px] font-bold text-white animate-bounce">
+                {unreadCount}
+              </span>
+            )}
+          </button>
+
           {/* Countdown Clock */}
           <div className="flex items-center gap-1.5 rounded bg-red-950/40 border border-red-900/50 px-3 py-1.5 text-xs font-bold text-red-400">
             <Clock className="h-3.5 w-3.5" />
@@ -1123,7 +1216,79 @@ export const InterviewRoom: React.FC = () => {
       </header>
 
       {/* CORE WORKSPACE GRID */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden relative">
+        {/* Chat Sidebar slide-in panel */}
+        {isChatOpen && (
+          <div className="absolute right-0 top-0 bottom-0 z-30 w-80 border-l border-slate-800 bg-[#0f172a] flex flex-col shadow-2xl transition-all duration-350 ease-in-out">
+            {/* Chat Header */}
+            <div className="flex h-12 shrink-0 items-center justify-between border-b border-slate-800 px-4 bg-[#1e293b]/50">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-350 flex items-center gap-1.5">
+                <MessageSquare className="h-4 w-4 text-brand" /> Room Chat
+              </span>
+              <button
+                onClick={() => setIsChatOpen(false)}
+                className="rounded-full p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-all cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Message List */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 flex flex-col">
+              {chatMessages.length === 0 ? (
+                <div className="flex-1 flex flex-col items-center justify-center text-slate-500 text-xs text-center p-4">
+                  <MessageSquare className="h-8 w-8 text-slate-700 mb-2 opacity-50" />
+                  No messages yet. Type notes or hints here!
+                </div>
+              ) : (
+                chatMessages.map((msg) => {
+                  const isMe = msg.senderId === user?.uid;
+                  return (
+                    <div
+                      key={msg.id}
+                      className={`flex flex-col max-w-[85%] ${isMe ? 'self-end items-end' : 'self-start items-start'}`}
+                    >
+                      <span className="text-[10px] text-slate-500 font-semibold mb-0.5 px-1">
+                        {isMe ? 'You' : msg.senderName}
+                      </span>
+                      <div
+                        className={`rounded-2xl px-3.5 py-2 text-xs leading-relaxed wrap-break-word ${
+                          isMe
+                            ? 'bg-teal-700 text-white rounded-tr-none'
+                            : 'bg-slate-800 text-slate-200 rounded-tl-none'
+                        }`}
+                      >
+                        {msg.text}
+                      </div>
+                      <span className="text-[8px] text-slate-600 mt-0.5 px-1">
+                        {formatMsgTime(msg.timestamp)}
+                      </span>
+                    </div>
+                  );
+                })
+              )}
+              <div ref={chatEndRef} />
+            </div>
+
+            {/* Input Form */}
+            <form onSubmit={handleSendChatMessage} className="border-t border-slate-800 p-3 bg-[#0b0f19] flex gap-2">
+              <input
+                type="text"
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                placeholder="Type a message..."
+                className="flex-1 rounded-lg border border-slate-800 bg-[#0f172a] px-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:border-brand focus:outline-none"
+              />
+              <button
+                type="submit"
+                className="rounded-lg bg-brand hover:bg-brand-hover text-white px-3.5 py-1.5 text-xs font-bold transition-all cursor-pointer"
+              >
+                Send
+              </button>
+            </form>
+          </div>
+        )}
+
         {/* LEFT VIDEO PANEL (60%) */}
         <div className="flex w-[60%] flex-col bg-[#0b0f19] p-4 relative justify-between">
           <div className="grid flex-1 grid-rows-2 gap-4">

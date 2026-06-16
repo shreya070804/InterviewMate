@@ -573,6 +573,12 @@ export const Dashboard: React.FC = () => {
                     </div>
                   </div>
                 </div>
+                <button
+                  onClick={() => navigate('/skills')}
+                  className="mt-4 w-full text-center text-xs font-bold text-brand hover:underline cursor-pointer flex items-center justify-center gap-1"
+                >
+                  View Skill Gap Analysis &rarr;
+                </button>
               </div>
 
               {/* Quick Prep */}

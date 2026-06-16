@@ -70,6 +70,14 @@ export const Navbar: React.FC = () => {
               >
                 History
               </Link>
+              <Link
+                to="/skills"
+                className={`text-sm font-medium transition-colors hover:text-brand ${
+                  isActive('/skills') ? 'text-brand border-b-2 border-brand py-5' : 'text-slate-500 dark:text-slate-400'
+                }`}
+              >
+                Skill Tracker
+              </Link>
               <span className="text-sm font-medium text-slate-400 dark:text-slate-500 cursor-not-allowed">Resources</span>
             </div>
           </div>
@@ -191,6 +199,15 @@ export const Navbar: React.FC = () => {
             }`}
           >
             History
+          </Link>
+          <Link
+            to="/skills"
+            onClick={() => setMobileMenuOpen(false)}
+            className={`block rounded-md px-3 py-2 text-base font-medium ${
+              isActive('/skills') ? 'bg-brand/10 text-brand' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+            }`}
+          >
+            Skill Tracker
           </Link>
           <div className="border-t border-slate-100 dark:border-slate-800 my-2 pt-2">
             <div className="flex items-center gap-3 px-3 py-2">

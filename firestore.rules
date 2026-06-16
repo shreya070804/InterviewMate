@@ -24,6 +24,10 @@ service cloud.firestore {
       allow delete: if isAuthenticated() && resource.data.hostId == request.auth.uid;
     }
 
+    match /sessions/{sessionId}/messages/{messageId} {
+      allow read, write: if isAuthenticated();
+    }
+
     // Feedback rules: authenticated users can read feedback for sessions they participated in, and write if they are host or guest
     match /feedback/{feedbackId} {
       allow read: if isAuthenticated() && (
