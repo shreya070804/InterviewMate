@@ -8,6 +8,7 @@ import { InterviewRoom } from './pages/InterviewRoom';
 import { FeedbackDetails } from './pages/FeedbackDetails';
 import { History } from './pages/History';
 import { SoloInterview } from './pages/SoloInterview';
+import { Leaderboard } from './pages/Leaderboard';
 import { NotFound } from './pages/NotFound';
 
 function App() {
@@ -44,6 +45,16 @@ function App() {
             element={
               <ProtectedRoute requireOnboarded={true}>
                 <History />
+              </ProtectedRoute>
+            } 
+          />
+
+          {/* Leaderboard Route */}
+          <Route 
+            path="/leaderboard" 
+            element={
+              <ProtectedRoute requireOnboarded={true}>
+                <Leaderboard />
               </ProtectedRoute>
             } 
           />

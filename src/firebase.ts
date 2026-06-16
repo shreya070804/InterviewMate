@@ -23,6 +23,7 @@ import {
   serverTimestamp,
   deleteDoc
 } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import type { UserProfile, Session, Question, Feedback } from './types';
 
 
@@ -39,6 +40,7 @@ const isFirebaseConfigured = !!(apiKey && authDomain && projectId);
 let firebaseApp: any = null;
 let firebaseAuth: any = null;
 let firestoreDb: any = null;
+let firebaseFunctions: any = null;
 
 if (isFirebaseConfigured) {
   try {
@@ -52,6 +54,7 @@ if (isFirebaseConfigured) {
     }) : getApp();
     firebaseAuth = getAuth(firebaseApp);
     firestoreDb = getFirestore(firebaseApp);
+    firebaseFunctions = getFunctions(firebaseApp);
     console.log("Firebase initialized successfully in Real Mode.");
   } catch (error) {
     console.error("Error initializing Firebase, falling back to Mock Mode:", error);
@@ -752,4 +755,162 @@ export const subscribeToQueueItem = (queueId: string, callback: (data: any) => v
     };
   }
 };
+
+export const uploadAndParseResume = async (userId: string, pdfBase64: string): Promise<string> => {
+  if (!MOCK_MODE) {
+    const parseFn = httpsCallable(firebaseFunctions, 'parseResume');
+    const result = await parseFn({ pdfBase64 });
+    const text = (result.data as any).text || '';
+    return text;
+  } else {
+    // Mock Mode
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        const mockResumeText = `
+SHREYA SHARMA
+Software Engineering Candidate
+Email: shreya@example.com | GitHub: github.com/shreya
+
+TECHNICAL SKILLS:
+- Languages: Python, JavaScript, TypeScript, Java, C++
+- Frontend: React, HTML5, CSS3, Tailwind CSS, Next.js
+- Backend & Cloud: Node.js, Express, Firebase Firestore, AWS (S3, EC2), Docker
+- Domain: Machine Learning, Data Structures & Algorithms, System Design
+
+PROJECTS:
+1. COLLABORATIVE IDE (React, Node.js, Socket.io, Firebase)
+- Developed a real-time collaborative coding sandbox with synced text inputs and execution runtimes.
+- Built a secure client-side Monaco Editor container running execution checks.
+
+2. PREDICTIVE HEALTHCARE ANALYTICS (Python, Machine Learning, TensorFlow, Pandas)
+- Trained neural network models to predict health metrics from unstructured logs with 92% correctness.
+- Optimized spatial footprint of dataset parsing structures.
+        `;
+
+        // Update profile
+        const users = getLocalData('im_users', {});
+        if (users[userId]) {
+          users[userId].resumeText = mockResumeText;
+          setLocalData('im_users', users);
+        }
+        window.dispatchEvent(new Event('storage'));
+        resolve(mockResumeText);
+      }, 1500);
+    });
+  }
+};
+
+export const triggerMockLeaderboardCalculation = async (userId: string): Promise<void> => {
+  if (MOCK_MODE) {
+    const optIns = getLocalData('im_leaderboard_opt_in', {});
+    
+    // Seed some mock players with scores
+    const mockPlayers = [
+      { userId: 'mock_1', displayName: 'Priya Patel', avgScore: 9.2, sessionsCompleted: 14, optedIn: true },
+      { userId: 'mock_2', displayName: 'Rohan Sharma', avgScore: 8.8, sessionsCompleted: 11, optedIn: true },
+      { userId: 'mock_3', displayName: 'Emily Watson', avgScore: 8.5, sessionsCompleted: 9, optedIn: true },
+      { userId: 'mock_4', displayName: 'David Kim', avgScore: 8.1, sessionsCompleted: 7, optedIn: true },
+      { userId: 'mock_5', displayName: 'Siddharth M.', avgScore: 7.9, sessionsCompleted: 12, optedIn: true },
+      { userId: 'mock_6', displayName: 'Sarah Jenkins', avgScore: 7.6, sessionsCompleted: 5, optedIn: true },
+      { userId: 'mock_7', displayName: 'Amit Goel', avgScore: 7.3, sessionsCompleted: 4, optedIn: true },
+      { userId: 'mock_8', displayName: 'Carlos Ruiz', avgScore: 6.9, sessionsCompleted: 3, optedIn: true }
+    ];
+
+    // Compute the current user's score from im_feedback
+    const feedbackList = getLocalData('im_feedback', []);
+    const userFeedback = feedbackList.filter((f: any) => f.userId === userId || f.reviewerId === userId);
+    
+    let userAvg = 0;
+    let userSessionsCount = userFeedback.length;
+    if (userSessionsCount > 0) {
+      const total = userFeedback.reduce((acc: number, f: any) => {
+        return acc + (f.scores.correctness + f.scores.efficiency + f.scores.communication) / 3;
+      }, 0);
+      userAvg = parseFloat((total / userSessionsCount).toFixed(2));
+    } else {
+      // Default placeholder if they haven't finished any mock sessions
+      userAvg = 7.8;
+      userSessionsCount = 2;
+    }
+
+    const currentUserOptIn = optIns[userId];
+    const userOptedIn = currentUserOptIn ? currentUserOptIn.optedIn : false;
+
+    // Combine players
+    const allOptedInPlayers = [...mockPlayers];
+    if (userOptedIn) {
+      const userProfile = getLocalData('im_users', {})[userId] || {};
+      allOptedInPlayers.push({
+        userId,
+        displayName: userProfile.displayName || 'Developer (You)',
+        avgScore: userAvg,
+        sessionsCompleted: userSessionsCount,
+        optedIn: true
+      });
+    }
+
+    // Sort by avgScore desc, then by sessions completed desc
+    allOptedInPlayers.sort((a, b) => b.avgScore - a.avgScore || b.sessionsCompleted - a.sessionsCompleted);
+
+    // Write ranks
+    const finalLeaderboard = allOptedInPlayers.map((player, index) => ({
+      rank: index + 1,
+      userId: player.userId,
+      displayName: player.displayName,
+      avgScore: player.avgScore,
+      sessionsCompleted: player.sessionsCompleted,
+      updatedAt: new Date().toISOString()
+    }));
+
+    setLocalData('im_weekly_leaderboard', finalLeaderboard);
+    window.dispatchEvent(new Event('storage'));
+  }
+};
+
+export const optInToLeaderboard = async (userId: string, optedIn: boolean, displayName: string): Promise<void> => {
+  if (!MOCK_MODE) {
+    await setDoc(doc(firestoreDb, 'leaderboard_opt_in', userId), {
+      optedIn,
+      userId,
+      displayName,
+      updatedAt: serverTimestamp()
+    });
+    await updateDoc(doc(firestoreDb, 'users', userId), {
+      optedInLeaderboard: optedIn
+    });
+  } else {
+    const optIns = getLocalData('im_leaderboard_opt_in', {});
+    optIns[userId] = { optedIn, userId, displayName };
+    setLocalData('im_leaderboard_opt_in', optIns);
+
+    const users = getLocalData('im_users', {});
+    if (users[userId]) {
+      users[userId].optedInLeaderboard = optedIn;
+      setLocalData('im_users', users);
+    }
+    window.dispatchEvent(new Event('storage'));
+    
+    // Trigger rank calculation so the leaderboard updates immediately in UI
+    await triggerMockLeaderboardCalculation(userId);
+  }
+};
+
+export const getWeeklyLeaderboard = async (): Promise<any[]> => {
+  if (!MOCK_MODE) {
+    const collRef = collection(firestoreDb, 'weekly_leaderboard');
+    const snap = await getDocs(collRef);
+    return snap.docs.map(d => d.data()).sort((a: any, b: any) => a.rank - b.rank);
+  } else {
+    // If not calculated yet, trigger a mock calculation
+    let board = getLocalData('im_weekly_leaderboard', []);
+    if (board.length === 0) {
+      const currentUser = localStorage.getItem('im_current_user');
+      const uid = currentUser ? JSON.parse(currentUser).uid : 'mock_user_123';
+      await triggerMockLeaderboardCalculation(uid);
+      board = getLocalData('im_weekly_leaderboard', []);
+    }
+    return board;
+  }
+};
+
 

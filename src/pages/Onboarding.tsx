@@ -65,7 +65,7 @@ export const Onboarding: React.FC = () => {
 
   return (
     <Layout showNavbar={!!profile?.onboarded}>
-      <div className="flex flex-col items-center justify-center bg-[#fcfcfc] px-4 py-16 sm:px-6 lg:px-8">
+      <div className="flex flex-col items-center justify-center px-4 py-16 sm:px-6 lg:px-8">
         <div className="w-full max-w-xl space-y-8">
           <div className="text-center">
             <span className="text-sm font-bold tracking-wider text-brand uppercase">Setup your account</span>

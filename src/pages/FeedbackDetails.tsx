@@ -340,7 +340,7 @@ export const FeedbackDetails: React.FC = () => {
       const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
-        backgroundColor: '#fcfcfc'
+        backgroundColor: document.documentElement.classList.contains('dark') ? '#020617' : '#fcfcfc'
       });
 
       if (actionButtons) actionButtons.style.display = 'flex';
@@ -420,7 +420,7 @@ export const FeedbackDetails: React.FC = () => {
 
   return (
     <Layout>
-      <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8 bg-[#fcfcfc]" id="feedback-report-content">
+      <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8 bg-[#fcfcfc] dark:bg-[#020617]" id="feedback-report-content">
         {/* Back navigation */}
         <button
           onClick={() => navigate('/')}

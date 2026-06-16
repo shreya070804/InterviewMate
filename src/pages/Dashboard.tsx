@@ -9,7 +9,9 @@ import {
   updateSession,
   addToMatchmakingQueue,
   removeFromMatchmakingQueue,
-  subscribeToQueueItem
+  subscribeToQueueItem,
+  uploadAndParseResume,
+  optInToLeaderboard
 } from '../firebase';
 import type { Session, Feedback } from '../types';
 import { 
@@ -24,17 +26,90 @@ import {
   Terminal, 
   UserPlus, 
   MessageSquare,
-  Sparkles
+  Sparkles,
+  Award
 } from 'lucide-react';
 
+const detectSkills = (text?: string): string[] => {
+  if (!text) return [];
+  const skillsList = [
+    'React', 'Python', 'Machine Learning', 'JavaScript', 'TypeScript', 'Java', 'C++',
+    'Node.js', 'Express', 'SQL', 'NoSQL', 'AWS', 'Docker', 'System Design', 'Algorithms',
+    'HTML', 'CSS', 'Tailwind', 'Next.js', 'TensorFlow', 'PyTorch', 'Git', 'Kubernetes'
+  ];
+  return skillsList.filter(skill => {
+    const regex = new RegExp(`\\b${skill.replace('.', '\\.')}\\b`, 'i');
+    return regex.test(text);
+  });
+};
 
 export const Dashboard: React.FC = () => {
-  const { user, profile } = useAuth();
+  const { user, profile, updateProfile } = useAuth();
   const navigate = useNavigate();
 
   const [sessions, setSessions] = useState<Session[]>([]);
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Resume Upload State
+  const [isParsingResume, setIsParsingResume] = useState(false);
+
+  // Leaderboard State
+  const [isOptedIn, setIsOptedIn] = useState(false);
+  const [submittingOptIn, setSubmittingOptIn] = useState(false);
+
+  useEffect(() => {
+    if (profile) {
+      setIsOptedIn(!!profile.optedInLeaderboard);
+    }
+  }, [profile]);
+
+  const handleResumeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.type !== 'application/pdf') {
+      alert("Please upload a PDF file.");
+      return;
+    }
+
+    setIsParsingResume(true);
+    try {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = async () => {
+        const resultStr = reader.result as string;
+        const base64Data = resultStr.split(',')[1];
+        if (user) {
+          const parsedText = await uploadAndParseResume(user.uid, base64Data);
+          await updateProfile({ resumeText: parsedText });
+        }
+      };
+    } catch (err) {
+      console.error(err);
+      alert("Failed to parse and upload resume.");
+    } finally {
+      setIsParsingResume(false);
+    }
+  };
+
+  const handleOptInToggle = async () => {
+    if (!user || !profile) return;
+    setSubmittingOptIn(true);
+    try {
+      const nextOptIn = !isOptedIn;
+      await optInToLeaderboard(
+        user.uid, 
+        nextOptIn, 
+        profile.displayName || user.displayName || 'Developer'
+      );
+      setIsOptedIn(nextOptIn);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to update leaderboard settings");
+    } finally {
+      setSubmittingOptIn(false);
+    }
+  };
 
   // Matchmaking State
   const [isMatchmakerOpen, setIsMatchmakerOpen] = useState(false);
@@ -247,7 +322,7 @@ export const Dashboard: React.FC = () => {
 
   return (
     <Layout>
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 bg-[#fcfcfc]">
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Metric Cards Top Row */}
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-3 mb-8">
           {/* Metric 1 */}
@@ -461,6 +536,104 @@ export const Dashboard: React.FC = () => {
                   className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white py-2.5 text-xs font-bold shadow-sm border border-slate-700 transition-all cursor-pointer"
                 >
                   <Sparkles className="h-4 w-4 text-brand" /> Practice solo
+                </button>
+              </div>
+            </div>
+
+            {/* Resume Profile Card */}
+            <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm text-left transition-colors duration-200">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 mb-4">
+                <h3 className="text-sm font-bold text-slate-800 dark:text-white flex items-center gap-1.5 uppercase tracking-wider">
+                  <Copy className="h-4.5 w-4.5 text-brand" /> Resume Profile
+                </h3>
+                {profile?.resumeText ? (
+                  <span className="text-[10px] bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-bold px-2 py-0.5 rounded">
+                    Active
+                  </span>
+                ) : (
+                  <span className="text-[10px] bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 font-bold px-2 py-0.5 rounded">
+                    Empty
+                  </span>
+                )}
+              </div>
+
+              {isParsingResume ? (
+                <div className="py-4 text-center">
+                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-brand border-t-transparent mx-auto mb-2"></div>
+                  <p className="text-xs text-slate-500">Extracting text and updating profile...</p>
+                </div>
+              ) : profile?.resumeText ? (
+                <div className="space-y-3">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                    Your resume is active. AI question generation will tailor questions to your projects and background.
+                  </p>
+                  <div>
+                    <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-1">Detected skills</span>
+                    <div className="flex flex-wrap gap-1">
+                      {detectSkills(profile.resumeText).map((s: string) => (
+                        <span key={s} className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-650 dark:text-slate-350 px-2 py-0.5 rounded">
+                          {s}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <label className="block mt-3">
+                    <span className="text-xs text-brand hover:underline font-bold cursor-pointer">
+                      Replace Resume PDF
+                    </span>
+                    <input
+                      type="file"
+                      accept=".pdf"
+                      className="hidden"
+                      onChange={handleResumeUpload}
+                    />
+                  </label>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                    Upload your resume in PDF format to enable personalized questions tailored to your skills.
+                  </p>
+                  <label className="flex items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-800 hover:border-brand dark:hover:border-brand rounded-xl py-5 cursor-pointer transition-colors bg-slate-50 dark:bg-slate-900/50">
+                    <div className="text-center">
+                      <span className="text-xs font-bold text-brand block">Select PDF</span>
+                      <span className="text-[9px] text-slate-400">Max size 2MB</span>
+                    </div>
+                    <input
+                      type="file"
+                      accept=".pdf"
+                      className="hidden"
+                      onChange={handleResumeUpload}
+                    />
+                  </label>
+                </div>
+              )}
+            </div>
+
+            {/* Leaderboard Settings Card */}
+            <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm text-left transition-colors duration-200">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 mb-4">
+                <h3 className="text-sm font-bold text-slate-800 dark:text-white flex items-center gap-1.5 uppercase tracking-wider">
+                  <Award className="h-4.5 w-4.5 text-brand" /> Leaderboard Settings
+                </h3>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <div className="text-left">
+                  <p className="text-xs font-bold text-slate-800 dark:text-slate-200">Public Rank</p>
+                  <p className="text-[10px] text-slate-400">Show me on the leaderboard</p>
+                </div>
+                <button
+                  onClick={handleOptInToggle}
+                  disabled={submittingOptIn}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    isOptedIn ? 'bg-brand' : 'bg-slate-250 dark:bg-slate-800'
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                      isOptedIn ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
                 </button>
               </div>
             </div>

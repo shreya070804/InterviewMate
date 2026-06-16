@@ -7,6 +7,8 @@ export interface UserProfile {
   skills: string[];
   onboarded: boolean;
   createdAt?: any;
+  resumeText?: string;
+  optedInLeaderboard?: boolean;
 }
 
 export interface Session {
@@ -36,6 +38,18 @@ export interface Session {
     stderr?: string;
     compileOutput?: string;
     status: 'success' | 'error' | 'compile_error' | 'timeout' | 'idle';
+  } | null;
+  hrTranscript?: string;
+  reminderSent?: boolean;
+  hrScores?: {
+    clarity_score: number;
+    structure_score: number;
+    filler_word_count: number;
+    feedback: string;
+    confidence_score?: number;
+    wpm?: number;
+    pace_assessment?: 'too fast' | 'ideal' | 'too slow';
+    specific_feedback?: string;
   } | null;
 }
 

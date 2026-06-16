@@ -9,7 +9,7 @@ interface LayoutProps {
 
 export const Layout: React.FC<LayoutProps> = ({ children, showNavbar = true }) => {
   return (
-    <div className="min-h-screen flex flex-col bg-[#fcfcfc]">
+    <div className="min-h-screen flex flex-col bg-[#fcfcfc] dark:bg-slate-950 dark:text-slate-100">
       {showNavbar && <Navbar />}
       <motion.main
         initial={{ opacity: 0, y: 15 }}

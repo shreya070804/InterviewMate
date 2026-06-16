@@ -6,9 +6,11 @@ import {
   updateSession, 
   getQuestions, 
   saveFeedback, 
-  saveQuestion 
+  saveQuestion,
+  getUserProfile,
+  MOCK_MODE
 } from '../firebase';
-import type { Session, Question } from '../types';
+import type { Session, Question, UserProfile } from '../types';
 import Editor from '@monaco-editor/react';
 import AgoraRTC from 'agora-rtc-sdk-ng';
 import type { IAgoraRTCClient, ICameraVideoTrack, IMicrophoneAudioTrack } from 'agora-rtc-sdk-ng';
@@ -39,6 +41,40 @@ import "@excalidraw/excalidraw/index.css";
 
 const AGORA_APP_ID = import.meta.env.VITE_AGORA_APP_ID || '';
 
+const detectSkills = (text?: string): string[] => {
+  if (!text) return [];
+  const skillsList = [
+    'React', 'Python', 'Machine Learning', 'JavaScript', 'TypeScript', 'Java', 'C++',
+    'Node.js', 'Express', 'SQL', 'NoSQL', 'AWS', 'Docker', 'System Design', 'Algorithms',
+    'HTML', 'CSS', 'Tailwind', 'Next.js', 'TensorFlow', 'PyTorch', 'Git', 'Kubernetes'
+  ];
+  return skillsList.filter(skill => {
+    const regex = new RegExp(`\\b${skill.replace('.', '\\.')}\\b`, 'i');
+    return regex.test(text);
+  });
+};
+
+const MOCK_CANDIDATE_RESUME = `
+SHREYA SHARMA
+Software Engineering Candidate
+Email: shreya@example.com | GitHub: github.com/shreya
+
+TECHNICAL SKILLS:
+- Languages: Python, JavaScript, TypeScript, Java, C++
+- Frontend: React, HTML5, CSS3, Tailwind CSS, Next.js
+- Backend & Cloud: Node.js, Express, Firebase Firestore, AWS (S3, EC2), Docker
+- Domain: Machine Learning, Data Structures & Algorithms, System Design
+
+PROJECTS:
+1. COLLABORATIVE IDE (React, Node.js, Socket.io, Firebase)
+- Developed a real-time collaborative coding sandbox with synced text inputs and execution runtimes.
+- Built a secure client-side Monaco Editor container running execution checks.
+
+2. PREDICTIVE HEALTHCARE ANALYTICS (Python, Machine Learning, TensorFlow, Pandas)
+- Trained neural network models to predict health metrics from unstructured logs with 92% correctness.
+- Optimized spatial footprint of dataset parsing structures.
+`;
+
 export const InterviewRoom: React.FC = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
   const { user, profile } = useAuth();
@@ -49,6 +85,15 @@ export const InterviewRoom: React.FC = () => {
   const [isQuestionPickerOpen, setIsQuestionPickerOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<'All' | 'DSA' | 'System Design' | 'Frontend' | 'HR'>('All');
+
+  // Candidate resume & Voice answers states
+  const [candidateProfile, setCandidateProfile] = useState<UserProfile | null>(null);
+  const [tailorToResume, setTailorToResume] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [localTranscript, setLocalTranscript] = useState('');
+  const [isAnalyzingVoice, setIsAnalyzingVoice] = useState(false);
+  const recognitionRef = useRef<any>(null);
+  const recordingStartTimeRef = useRef<number>(0);
   
   // Custom Question Form State
   const [isCustomQuestionOpen, setIsCustomQuestionOpen] = useState(false);
@@ -193,6 +238,24 @@ export const InterviewRoom: React.FC = () => {
       unsubscribe();
     };
   }, [sessionId, user]);
+
+  // Load candidate profile
+  useEffect(() => {
+    const fetchCandidateProfile = async () => {
+      if (!session) return;
+      if (session.hostId === user?.uid && session.guestId) {
+        try {
+          const prof = await getUserProfile(session.guestId);
+          setCandidateProfile(prof);
+        } catch (e) {
+          console.error("Error fetching guest profile", e);
+        }
+      } else {
+        setCandidateProfile(profile);
+      }
+    };
+    fetchCandidateProfile();
+  }, [session?.guestId, session?.hostId, user?.uid, profile]);
 
   // Countdown timer clock
   useEffect(() => {
@@ -538,6 +601,242 @@ export const InterviewRoom: React.FC = () => {
     }, 500);
   };
 
+  // Voice Recording and Evaluation Handlers
+  const startRecording = () => {
+    recordingStartTimeRef.current = Date.now();
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setIsRecording(true);
+      setLocalTranscript("Starting mock voice recording... Speak now.");
+      simulateMockVoiceAnswering();
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    recognition.onstart = () => {
+      setIsRecording(true);
+      setLocalTranscript('');
+      if (sessionId) {
+        updateSession(sessionId, { hrTranscript: '', hrScores: null });
+      }
+    };
+
+    recognition.onresult = (event: any) => {
+      let finalTranscript = '';
+      for (let i = 0; i < event.results.length; ++i) {
+        finalTranscript += event.results[i][0].transcript;
+      }
+      if (finalTranscript) {
+        setLocalTranscript(finalTranscript);
+        if (sessionId) {
+          updateSession(sessionId, { hrTranscript: finalTranscript });
+        }
+      }
+    };
+
+    recognition.onerror = (err: any) => {
+      console.error("Speech recognition error", err);
+      setIsRecording(false);
+    };
+
+    recognition.onend = () => {
+      setIsRecording(false);
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+  };
+
+  const simulateMockVoiceAnswering = () => {
+    recordingStartTimeRef.current = Date.now();
+    const mockPhrases = [
+      "So, um, in my last project, we had a major deadline slippage because, uh, two team members left.",
+      "The task was to, like, rewrite the entire onboarding flow in under two weeks.",
+      "So I took the initiative to set up a daily standup, and you know, coordinate task delegations.",
+      "In the end, we managed to deploy the system on time with zero bugs, which was, uh, a great result."
+    ];
+    let index = 0;
+    let currentText = '';
+    const interval = setInterval(() => {
+      if (index < mockPhrases.length) {
+        currentText += (currentText ? ' ' : '') + mockPhrases[index];
+        setLocalTranscript(currentText);
+        if (sessionId) {
+          updateSession(sessionId, { hrTranscript: currentText });
+        }
+        index++;
+      } else {
+        clearInterval(interval);
+        setIsRecording(false);
+        const duration = Math.max(1, (Date.now() - recordingStartTimeRef.current) / 1000);
+        analyzeVoiceAnswer(currentText, duration);
+      }
+    }, 2000);
+    recognitionRef.current = { stop: () => clearInterval(interval) };
+  };
+
+  const stopRecording = () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+    }
+    setIsRecording(false);
+    const duration = Math.max(1, (Date.now() - recordingStartTimeRef.current) / 1000);
+    analyzeVoiceAnswer(undefined, duration);
+  };
+
+  const analyzeVoiceAnswer = async (textOverride?: string, durationSeconds?: number) => {
+    const transcriptToAnalyze = textOverride !== undefined ? textOverride : localTranscript || session?.hrTranscript || '';
+    if (!transcriptToAnalyze.trim()) return;
+
+    setIsAnalyzingVoice(true);
+    const apiKey = localStorage.getItem('im_claude_key') || import.meta.env.VITE_ANTHROPIC_API_KEY || '';
+
+    const duration = durationSeconds || 15;
+    const wordCount = transcriptToAnalyze.trim().split(/\s+/).length;
+    const wpm = Math.round((wordCount / duration) * 60);
+
+    const fillerWords = ['um', 'uh', 'like', 'you know'];
+    let fillerCount = 0;
+    fillerWords.forEach(word => {
+      const regex = new RegExp(`\\b${word}\\b`, 'gi');
+      const matches = transcriptToAnalyze.match(regex);
+      if (matches) {
+        fillerCount += matches.length;
+      }
+    });
+
+    if (apiKey) {
+      try {
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+            'content-type': 'application/json',
+            'dangerously-allow-html-user-override': 'true'
+          } as any,
+          body: JSON.stringify({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 1000,
+            messages: [
+              {
+                role: 'user',
+                content: `Given this transcript and a speaking pace of ${wpm} words per minute, assess confidence level. Ideal pace is 130-160 wpm. Transcript: "${transcriptToAnalyze}". Return JSON with: pace_assessment (too fast/ideal/too slow), confidence_score (1-10), specific_feedback (1-2 sentences about pacing and tone based on word choice).`
+              }
+            ],
+            system: "You are an expert HR interviewer. Analyze the provided spoken transcript. Respond ONLY with a valid JSON object containing: clarity_score (number 1-10), structure_score (number 1-10 based on STAR structure), filler_word_count (number), feedback (string, exactly 2 sentences), confidence_score (number 1-10), pace_assessment (string: 'too fast', 'ideal', or 'too slow'), and specific_feedback (string, 1-2 sentences about pacing and tone based on word choice)."
+          })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const jsonText = data.content[0].text;
+          const cleanJson = jsonText.replace(/```json/g, '').replace(/```/g, '').trim();
+          const parsed = JSON.parse(cleanJson);
+          
+          if (sessionId) {
+            await updateSession(sessionId, {
+              hrScores: {
+                clarity_score: parsed.clarity_score || 7,
+                structure_score: parsed.structure_score || 7,
+                filler_word_count: parsed.filler_word_count !== undefined ? parsed.filler_word_count : fillerCount,
+                feedback: parsed.feedback || 'Good communication flow.',
+                confidence_score: parsed.confidence_score || 8,
+                wpm: wpm,
+                pace_assessment: parsed.pace_assessment || (wpm < 130 ? 'too slow' : wpm > 160 ? 'too fast' : 'ideal'),
+                specific_feedback: parsed.specific_feedback || 'Steady pacing and structured answer formulation.'
+              }
+            });
+          }
+          setIsAnalyzingVoice(false);
+          return;
+        }
+      } catch (err) {
+        console.warn("Claude voice evaluation failed, utilizing offline evaluator:", err);
+      }
+    }
+
+    // High fidelity offline mock assessment
+    setTimeout(() => {
+      const lower = transcriptToAnalyze.toLowerCase();
+      let starScore = 5;
+      if (lower.includes('situation') || lower.includes('background') || lower.includes('project')) starScore += 1.5;
+      if (lower.includes('task') || lower.includes('deadline') || lower.includes('goal')) starScore += 1.5;
+      if (lower.includes('action') || lower.includes('managed') || lower.includes('initiative') || lower.includes('started')) starScore += 1.5;
+      if (lower.includes('result') || lower.includes('end') || lower.includes('output') || lower.includes('metrics')) starScore += 1.5;
+      starScore = Math.min(10, Math.max(1, starScore));
+
+      const clarityScore = Math.min(10, Math.max(1, Math.round(9 - (fillerCount * 0.7))));
+
+      let confidenceScore = 8;
+      if (fillerCount > 3) confidenceScore -= 1.5;
+      if (wpm < 130 || wpm > 160) confidenceScore -= 1;
+      confidenceScore = Math.min(10, Math.max(1, confidenceScore));
+
+      const paceAssessment = wpm < 130 ? 'too slow' : wpm > 160 ? 'too fast' : 'ideal';
+      let specificFeedbackText = '';
+      if (paceAssessment === 'ideal') {
+        specificFeedbackText = `Your speaking pace of ${wpm} WPM is within the ideal 130-160 range, indicating calm authority. Word choice reflects logical organization and structured execution.`;
+      } else if (paceAssessment === 'too fast') {
+        specificFeedbackText = `At ${wpm} WPM, your speaking pace is slightly rushed, which can sometimes diminish message impact. Try adding pauses between critical milestones.`;
+      } else {
+        specificFeedbackText = `Your speaking pace of ${wpm} WPM is a bit slow. Aim to project more dynamic energy, keeping transitions between STAR elements snappy.`;
+      }
+
+      const feedback = `The candidate demonstrated ${starScore >= 7 ? 'solid' : 'partial'} adherence to the STAR method, specifically detailing the context. ${fillerCount > 3 ? 'However, the use of multiple filler words (um, uh, like) slightly affected delivery flow.' : 'The response flowed naturally with good clarity.'}`;
+
+      if (sessionId) {
+        updateSession(sessionId, {
+          hrScores: {
+            clarity_score: clarityScore,
+            structure_score: starScore,
+            filler_word_count: fillerCount,
+            feedback,
+            confidence_score: confidenceScore,
+            wpm: wpm,
+            pace_assessment: paceAssessment,
+            specific_feedback: specificFeedbackText
+          }
+        });
+      }
+      setIsAnalyzingVoice(false);
+    }, 1500);
+  };
+
+  const clearTranscript = () => {
+    setLocalTranscript('');
+    if (sessionId) {
+      updateSession(sessionId, { hrTranscript: '', hrScores: null });
+    }
+  };
+
+  const renderHighlightedTranscript = (text: string) => {
+    if (!text) return <span className="text-slate-500 font-sans">No transcript recorded yet. Speak your answer or let the mock run.</span>;
+
+    const fillerWords = ['um', 'uh', 'like', 'you know'];
+    const regex = /\b(um|uh|like|you\s+know)\b/gi;
+    const parts = text.split(regex);
+
+    return (
+      <span className="text-slate-350 leading-relaxed font-sans text-xs">
+        {parts.map((part, idx) => {
+          if (fillerWords.includes(part.toLowerCase().replace(/\s+/g, ' '))) {
+            return (
+              <mark key={idx} className="bg-amber-950/60 text-amber-400 border border-amber-800/40 rounded px-1 font-bold">
+                {part}
+              </mark>
+            );
+          }
+          return part;
+        })}
+      </span>
+    );
+  };
+
   // Claude AI Question Generation
   const handleGenerateQuestions = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -548,6 +847,11 @@ export const InterviewRoom: React.FC = () => {
     setGeneratedQuestions([]);
 
     const apiKey = localStorage.getItem('im_claude_key') || import.meta.env.VITE_ANTHROPIC_API_KEY || '';
+    const resumeText = candidateProfile?.resumeText || (MOCK_MODE ? MOCK_CANDIDATE_RESUME : '');
+
+    const tailorPrompt = tailorToResume && resumeText 
+      ? ` Here is the candidate's resume: ${resumeText}. Generate questions that specifically probe the skills and projects mentioned in this resume.`
+      : '';
 
     if (apiKey) {
       try {
@@ -565,7 +869,7 @@ export const InterviewRoom: React.FC = () => {
             messages: [
               {
                 role: 'user',
-                content: `Role: ${jobRole}, Difficulty: ${genDifficulty}`
+                content: `Role: ${jobRole}, Difficulty: ${genDifficulty}.${tailorPrompt}`
               }
             ],
             system: "You are a senior technical interviewer. Generate 5 interview questions for the given role and difficulty. Respond ONLY with a valid JSON array, no markdown, no explanation. Each object must have: title (string), description (string, 2-3 sentences), difficulty (Easy/Medium/Hard), category (DSA/System Design/Frontend/HR)."
@@ -605,7 +909,48 @@ export const InterviewRoom: React.FC = () => {
 
     // Local mock fallback
     setTimeout(() => {
-      const mockQuestionsList: Question[] = [
+      const detected = detectSkills(resumeText);
+      const skill1 = detected[0] || 'React';
+      const skill2 = detected[1] || 'Python';
+      const skill3 = detected[2] || 'System Design';
+
+      const mockQuestionsList: Question[] = tailorToResume ? [
+        {
+          id: `ai_${Date.now()}_1`,
+          title: `Probing project details: Collaborative IDE using ${skill1}`,
+          category: 'Frontend',
+          difficulty: genDifficulty,
+          description: `You worked on a Collaborative IDE using ${skill1}. Explain the architectural design, trade-offs of using sockets for synchronization, and how you solved local state mismatch bugs.`
+        },
+        {
+          id: `ai_${Date.now()}_2`,
+          title: `Optimizing Predictive Models with ${skill2}`,
+          category: 'DSA',
+          difficulty: genDifficulty,
+          description: `In your Predictive Healthcare Analytics project, how did you utilize ${skill2} to optimize dataset parsing performance? Explain the data structures you chose.`
+        },
+        {
+          id: `ai_${Date.now()}_3`,
+          title: `Scalable Architecture for ${skill3}`,
+          category: 'System Design',
+          difficulty: genDifficulty,
+          description: `Explain how you would design a high-throughput microservices backend to handle complex client hydration patterns. Discuss data synchronization strategies.`
+        },
+        {
+          id: `ai_${Date.now()}_4`,
+          title: `Handling Project Slippages`,
+          category: 'HR',
+          difficulty: genDifficulty,
+          description: `Describe a scenario where a critical deadline was missed in your collaborative coding sandbox. How did you communicate the slippage and adapt the milestones?`
+        },
+        {
+          id: `ai_${Date.now()}_5`,
+          title: `State Hydration in ${skill1}`,
+          category: 'Frontend',
+          difficulty: genDifficulty,
+          description: `Explain state hydration details when combining ${skill1} and Socket.io. How do you prevent mismatch hydration issues on page refresh?`
+        }
+      ] : [
         {
           id: `ai_${Date.now()}_1`,
           title: `Optimizing Database Schema for ${jobRole}`,
@@ -883,119 +1228,319 @@ export const InterviewRoom: React.FC = () => {
           )}
 
           {activeMode === 'code' ? (
-            <>
-              {/* Editor Header controls */}
-              <div className="flex h-11 shrink-0 items-center justify-between border-b border-slate-800 bg-[#131b2e] px-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-semibold tracking-wider text-slate-400 uppercase">SOLUTION.JS</span>
-                  <select
-                    value={language}
-                    onChange={handleLanguageChange}
-                    className="rounded border border-slate-800 bg-[#0f172a] px-2 py-1 text-xs font-semibold text-slate-300 focus:outline-none focus:ring-1 focus:ring-brand"
-                  >
-                    <option value="javascript">JavaScript</option>
-                    <option value="python">Python</option>
-                    <option value="java">Java</option>
-                    <option value="cpp">C++</option>
-                  </select>
-                </div>
-
-                <button
-                  onClick={runCode}
-                  disabled={isRunning || (lastOutput?.status === 'idle')}
-                  className="flex items-center gap-1.5 rounded bg-brand hover:bg-brand-hover px-3.5 py-1.5 text-xs font-bold transition-all disabled:opacity-50 cursor-pointer text-white"
-                >
-                  {isRunning || (lastOutput?.status === 'idle') ? (
-                    <>
-                      <RotateCw className="h-3 w-3 animate-spin" /> Running
-                    </>
-                  ) : (
-                    <>
-                      <Play className="h-3.5 w-3.5 fill-current" /> Run Code
-                    </>
-                  )}
-                </button>
-              </div>
-
-              {/* Monaco Editor Container */}
-              <div className="flex-1 min-h-[300px]">
-                <Editor
-                  height="100%"
-                  language={language === 'cpp' ? 'cpp' : language}
-                  theme="vs-dark"
-                  value={code}
-                  onChange={handleEditorChange}
-                  onMount={handleEditorDidMount}
-                  options={{
-                    fontSize: 13,
-                    minimap: { enabled: false },
-                    lineNumbers: 'on',
-                    roundedSelection: true,
-                    scrollBeyondLastLine: false,
-                    readOnly: false,
-                    cursorBlinking: 'smooth',
-                    fontFamily: 'Consolas, Monaco, monospace'
-                  }}
-                />
-              </div>
-
-              {/* Synced Terminal Console */}
-              <div className={`${isTerminalCollapsed ? 'h-9' : 'h-48'} border-t border-slate-800 bg-[#090d16] flex flex-col transition-all duration-200`}>
-                <div className="flex h-9 items-center justify-between border-b border-slate-800 bg-[#101726] px-3 shrink-0">
-                  <button 
-                    onClick={() => setIsTerminalCollapsed(!isTerminalCollapsed)}
-                    className="text-[10px] font-semibold tracking-wider text-slate-400 uppercase flex items-center gap-1.5 focus:outline-none hover:text-slate-200 cursor-pointer"
-                  >
-                    <Terminal className="h-3 w-3" /> Console Output {isTerminalCollapsed ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                  </button>
-                  
-                  {!isTerminalCollapsed && (
-                    <button 
-                      onClick={() => {
-                        if (sessionId) {
-                          updateSession(sessionId, { lastOutput: null });
-                        } else {
-                          setLastOutput(null);
-                        }
-                      }}
-                      className="text-[10px] text-slate-500 hover:text-slate-300 flex items-center gap-0.5 focus:outline-none cursor-pointer"
+            activeQuestion?.category === 'HR' ? (
+              <div className="flex flex-1 flex-col bg-[#0b0f19] p-6 overflow-y-auto">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4 shrink-0">
+                  <div className="flex items-center gap-2">
+                    <Mic className="h-5 w-5 text-brand" />
+                    <h3 className="text-sm font-bold text-white">HR Voice Answering Console</h3>
+                  </div>
+                  {((session?.hrTranscript) || localTranscript) && (
+                    <button
+                      onClick={clearTranscript}
+                      className="text-xs text-slate-500 hover:text-slate-300 flex items-center gap-1 cursor-pointer focus:outline-none"
                     >
-                      <Trash2 className="h-3 w-3" /> Clear
+                      <Trash2 className="h-3.5 w-3.5" /> Clear transcript
                     </button>
                   )}
                 </div>
 
-                {!isTerminalCollapsed && (
-                  <pre className="flex-1 overflow-auto p-4 text-[11px] font-mono leading-relaxed select-text whitespace-pre-wrap">
-                    {!lastOutput ? (
-                      <span className="text-slate-600">Console initialized. Ready to execute code solutions.</span>
-                    ) : lastOutput.status === 'idle' ? (
-                      <span className="text-slate-400 animate-pulse flex items-center gap-1.5">
-                        <RotateCw className="h-3.5 w-3.5 animate-spin" /> Compiling and running build inside Judge0 sandboxed runtime...
-                      </span>
-                    ) : lastOutput.status === 'timeout' ? (
-                      <span className="text-red-500 font-bold block">
-                        [Timeout Error] Execution exceeded 10 seconds.
-                      </span>
-                    ) : lastOutput.status === 'compile_error' ? (
-                      <span className="text-amber-500 block">
-                        [Compilation Error]
-                        {"\n"}{lastOutput.compileOutput}
-                      </span>
-                    ) : lastOutput.status === 'error' ? (
-                      <span className="text-red-500 block">
-                        [Execution Error]
-                        {"\n"}{lastOutput.stderr}
-                      </span>
+                {/* Microphone Record Card */}
+                <div className="bg-[#131b2e] border border-slate-800 rounded-xl p-6 flex flex-col items-center justify-center text-center shadow-md mb-6 shrink-0">
+                  <div className="mb-4">
+                    {isRecording ? (
+                      <button
+                        onClick={stopRecording}
+                        className="relative flex items-center justify-center h-20 w-20 rounded-full bg-red-600 text-white cursor-pointer shadow-lg hover:bg-red-700 transition-all animate-pulse"
+                      >
+                        <span className="absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75 animate-ping"></span>
+                        <MicOff className="h-8 w-8 relative z-10" />
+                      </button>
                     ) : (
-                      <span className="text-emerald-400 block">
-                        {lastOutput.stdout}
+                      <button
+                        onClick={startRecording}
+                        className="flex items-center justify-center h-20 w-20 rounded-full bg-brand hover:bg-brand-hover text-white cursor-pointer shadow-lg transition-all"
+                      >
+                        <Mic className="h-8 w-8" />
+                      </button>
+                    )}
+                  </div>
+                  
+                  <h4 className="text-xs font-bold text-slate-200 mb-1">
+                    {isRecording ? 'Recording Answer Live...' : 'Ready to Record Spoken Answer'}
+                  </h4>
+                  <p className="text-[11px] text-slate-400 max-w-xs leading-normal">
+                    {isRecording 
+                      ? 'We are converting your speech to text in real-time. Click the microphone again to stop and evaluate.' 
+                      : 'Speak your HR response using web speech recognition. We will analyze your STAR structure and filler words.'}
+                  </p>
+                </div>
+
+                {/* Live Transcript Panel */}
+                <div className="flex flex-col flex-1 min-h-[160px] mb-6">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                      Live Answer Transcript
+                    </span>
+                    {isRecording && (
+                      <span className="flex items-center gap-1 text-[10px] text-red-400 font-semibold">
+                        <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse"></span>
+                        Live Dictation Active
                       </span>
                     )}
-                  </pre>
+                  </div>
+                  <div className="flex-1 bg-slate-950/50 border border-slate-850 rounded-xl p-4 overflow-y-auto max-h-[200px]">
+                    {renderHighlightedTranscript(session?.hrTranscript || localTranscript)}
+                  </div>
+                </div>
+
+                {/* Scorecard Assessment Details */}
+                {isAnalyzingVoice && (
+                  <div className="flex flex-col items-center justify-center p-6 bg-slate-900/40 border border-slate-800 rounded-xl animate-pulse mb-6">
+                    <RotateCw className="h-7 w-7 text-brand animate-spin mb-2" />
+                    <span className="text-xs text-slate-350">Claude is evaluating answer clarity and STAR alignment...</span>
+                  </div>
+                )}
+
+                {session?.hrScores && !isAnalyzingVoice && (
+                  <div className="bg-[#131b2e] border border-slate-850 rounded-xl p-5 shadow-sm space-y-4">
+                    <h4 className="text-xs font-bold text-brand uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-800 pb-2">
+                      <Sparkles className="h-4 w-4" /> AI STAR Assessment Scorecard
+                    </h4>
+                    
+                    <div className="grid grid-cols-4 gap-2.5">
+                      {/* Clarity Card */}
+                      <div className="bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 text-center">
+                        <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider block mb-1">
+                          Clarity
+                        </span>
+                        <span className="text-base font-extrabold text-emerald-400">
+                          {session.hrScores.clarity_score}/10
+                        </span>
+                      </div>
+                      
+                      {/* STAR Structure Card */}
+                      <div className="bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 text-center">
+                        <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider block mb-1">
+                          STAR structure
+                        </span>
+                        <span className="text-base font-extrabold text-indigo-400">
+                          {session.hrScores.structure_score}/10
+                        </span>
+                      </div>
+
+                      {/* Confidence Score Card */}
+                      <div className="bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 text-center">
+                        <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider block mb-1">
+                          Confidence
+                        </span>
+                        <span className="text-base font-extrabold text-violet-400">
+                          {session.hrScores.confidence_score !== undefined ? `${session.hrScores.confidence_score}/10` : 'N/A'}
+                        </span>
+                      </div>
+
+                      {/* Filler Words Card */}
+                      <div className="bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 text-center">
+                        <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider block mb-1">
+                          Filler words
+                        </span>
+                        <span className={`text-base font-extrabold ${
+                          session.hrScores.filler_word_count > 3 ? 'text-amber-400' : 'text-slate-350'
+                        }`}>
+                          {session.hrScores.filler_word_count}
+                        </span>
+                      </div>
+                    </div>
+
+                    {session.hrScores.wpm !== undefined && (
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 border-t border-slate-800/60 pt-3.5">
+                        {/* WPM Speedometer Card */}
+                        <div className="md:col-span-1 bg-[#0f172a] border border-slate-800 rounded-lg p-3 flex flex-col items-center justify-center text-center">
+                          <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider block mb-1.5">
+                            Speaking Pace (WPM)
+                          </span>
+                          
+                          <div className="relative w-28 h-14 flex items-center justify-center overflow-hidden">
+                            <svg className="w-28 h-20 overflow-visible" viewBox="0 0 100 50">
+                              <path
+                                d="M 10 50 A 40 40 0 0 1 90 50"
+                                fill="none"
+                                stroke="#1e293b"
+                                strokeWidth="8"
+                              />
+                              <path
+                                d="M 42 13.5 A 40 40 0 0 1 73 22"
+                                fill="none"
+                                stroke="#2dd4bf"
+                                strokeWidth="8"
+                              />
+                              <line
+                                x1="50"
+                                y1="50"
+                                x2="50"
+                                y2="15"
+                                stroke="#6366f1"
+                                strokeWidth="3"
+                                strokeLinecap="round"
+                                transform={`rotate(${(() => {
+                                  const wpmVal = session.hrScores.wpm || 0;
+                                  const minW = 60;
+                                  const maxW = 220;
+                                  const percent = Math.min(100, Math.max(0, ((wpmVal - minW) / (maxW - minW)) * 100));
+                                  return (percent * 1.8) - 90;
+                                })()} 50 50)`}
+                                className="transition-transform duration-500 ease-out"
+                              />
+                              <circle cx="50" cy="50" r="5" fill="#6366f1" />
+                            </svg>
+                            
+                            <div className="absolute bottom-0 text-center">
+                              <span className="text-sm font-extrabold text-slate-100">{session.hrScores.wpm}</span>
+                              <span className={`text-[8px] font-bold block uppercase tracking-wider ${
+                                session.hrScores.pace_assessment === 'ideal' ? 'text-teal-400' : 'text-amber-500'
+                              }`}>
+                                {session.hrScores.pace_assessment}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Pace Feedback summary card */}
+                        <div className="md:col-span-2 bg-[#0f172a] border border-slate-800 rounded-lg p-3 flex flex-col justify-center text-left">
+                          <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider block mb-1">
+                            Pacing Feedback
+                          </span>
+                          <p className="text-[11px] text-slate-300 leading-relaxed font-sans">
+                            {session.hrScores.specific_feedback || 'Speaking pacing has been evaluated for this session.'}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="bg-[#0f172a]/60 border border-slate-800/80 rounded-lg p-3.5">
+                      <span className="text-[10px] font-bold text-slate-400 block mb-1">Feedback Summary</span>
+                      <p className="text-xs text-slate-300 leading-relaxed font-sans">
+                        {session.hrScores.feedback}
+                      </p>
+                    </div>
+                  </div>
                 )}
               </div>
-            </>
+            ) : (
+              <>
+                {/* Editor Header controls */}
+                <div className="flex h-11 shrink-0 items-center justify-between border-b border-slate-800 bg-[#131b2e] px-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-semibold tracking-wider text-slate-400 uppercase">SOLUTION.JS</span>
+                    <select
+                      value={language}
+                      onChange={handleLanguageChange}
+                      className="rounded border border-slate-800 bg-[#0f172a] px-2 py-1 text-xs font-semibold text-slate-300 focus:outline-none focus:ring-1 focus:ring-brand"
+                    >
+                      <option value="javascript">JavaScript</option>
+                      <option value="python">Python</option>
+                      <option value="java">Java</option>
+                      <option value="cpp">C++</option>
+                    </select>
+                  </div>
+
+                  <button
+                    onClick={runCode}
+                    disabled={isRunning || (lastOutput?.status === 'idle')}
+                    className="flex items-center gap-1.5 rounded bg-brand hover:bg-brand-hover px-3.5 py-1.5 text-xs font-bold transition-all disabled:opacity-50 cursor-pointer text-white"
+                  >
+                    {isRunning || (lastOutput?.status === 'idle') ? (
+                      <>
+                        <RotateCw className="h-3 w-3 animate-spin" /> Running
+                      </>
+                    ) : (
+                      <>
+                        <Play className="h-3.5 w-3.5 fill-current" /> Run Code
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* Monaco Editor Container */}
+                <div className="flex-1 min-h-[300px]">
+                  <Editor
+                    height="100%"
+                    language={language === 'cpp' ? 'cpp' : language}
+                    theme="vs-dark"
+                    value={code}
+                    onChange={handleEditorChange}
+                    onMount={handleEditorDidMount}
+                    options={{
+                      fontSize: 13,
+                      minimap: { enabled: false },
+                      lineNumbers: 'on',
+                      roundedSelection: true,
+                      scrollBeyondLastLine: false,
+                      readOnly: false,
+                      cursorBlinking: 'smooth',
+                      fontFamily: 'Consolas, Monaco, monospace'
+                    }}
+                  />
+                </div>
+
+                {/* Synced Terminal Console */}
+                <div className={`${isTerminalCollapsed ? 'h-9' : 'h-48'} border-t border-slate-800 bg-[#090d16] flex flex-col transition-all duration-200`}>
+                  <div className="flex h-9 items-center justify-between border-b border-slate-800 bg-[#101726] px-3 shrink-0">
+                    <button 
+                      onClick={() => setIsTerminalCollapsed(!isTerminalCollapsed)}
+                      className="text-[10px] font-semibold tracking-wider text-slate-400 uppercase flex items-center gap-1.5 focus:outline-none hover:text-slate-200 cursor-pointer"
+                    >
+                      <Terminal className="h-3 w-3" /> Console Output {isTerminalCollapsed ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                    </button>
+                    
+                    {!isTerminalCollapsed && (
+                      <button 
+                        onClick={() => {
+                          if (sessionId) {
+                            updateSession(sessionId, { lastOutput: null });
+                          } else {
+                            setLastOutput(null);
+                          }
+                        }}
+                        className="text-[10px] text-slate-500 hover:text-slate-300 flex items-center gap-0.5 focus:outline-none cursor-pointer"
+                      >
+                        <Trash2 className="h-3 w-3" /> Clear
+                      </button>
+                    )}
+                  </div>
+
+                  {!isTerminalCollapsed && (
+                    <pre className="flex-1 overflow-auto p-4 text-[11px] font-mono leading-relaxed select-text whitespace-pre-wrap">
+                      {!lastOutput ? (
+                        <span className="text-slate-600">Console initialized. Ready to execute code solutions.</span>
+                      ) : lastOutput.status === 'idle' ? (
+                        <span className="text-slate-400 animate-pulse flex items-center gap-1.5">
+                          <RotateCw className="h-3.5 w-3.5 animate-spin" /> Compiling and running build inside Judge0 sandboxed runtime...
+                        </span>
+                      ) : lastOutput.status === 'timeout' ? (
+                        <span className="text-red-500 font-bold block">
+                          [Timeout Error] Execution exceeded 10 seconds.
+                        </span>
+                      ) : lastOutput.status === 'compile_error' ? (
+                        <span className="text-amber-500 block">
+                          [Compilation Error]
+                          {"\n"}{lastOutput.compileOutput}
+                        </span>
+                      ) : lastOutput.status === 'error' ? (
+                        <span className="text-red-500 block">
+                          [Execution Error]
+                          {"\n"}{lastOutput.stderr}
+                        </span>
+                      ) : (
+                        <span className="text-emerald-400 block">
+                          {lastOutput.stdout}
+                        </span>
+                      )}
+                    </pre>
+                  )}
+                </div>
+              </>
+            )
           ) : (
             <div className="flex-1 relative overflow-hidden bg-slate-900 border-t border-slate-800">
               <Excalidraw
@@ -1164,6 +1709,27 @@ export const InterviewRoom: React.FC = () => {
                     </div>
                   </div>
 
+                  {/* Tailor to Resume Checkbox */}
+                  <div className="space-y-1.5 text-left">
+                    <div className="flex items-center gap-2 py-1">
+                      <input
+                        type="checkbox"
+                        id="tailorToResume"
+                        checked={tailorToResume}
+                        onChange={(e) => setTailorToResume(e.target.checked)}
+                        className="h-4 w-4 rounded border-slate-800 bg-[#0f172a] text-brand focus:ring-brand focus:ring-opacity-25 cursor-pointer"
+                      />
+                      <label htmlFor="tailorToResume" className="text-xs text-slate-300 font-semibold cursor-pointer select-none">
+                        Tailor to my resume
+                      </label>
+                    </div>
+                    {tailorToResume && !candidateProfile?.resumeText && !MOCK_MODE && (
+                      <p className="text-[10px] text-amber-500 font-medium leading-normal">
+                        ⚠️ No resume text found in candidate profile. Make sure a PDF resume has been uploaded in Dashboard settings.
+                      </p>
+                    )}
+                  </div>
+
                   <button
                     type="submit"
                     disabled={isGenerating || !jobRole.trim()}
@@ -1205,6 +1771,20 @@ export const InterviewRoom: React.FC = () => {
                   {!isGenerating && !genError && generatedQuestions.length > 0 && (
                     <div className="space-y-4 text-left">
                       <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Generated Questions</h5>
+                      {tailorToResume && (
+                        <div className="p-3 bg-indigo-950/20 border border-indigo-900/40 rounded-xl mb-3 text-left">
+                          <span className="text-[9px] font-bold text-indigo-400 uppercase tracking-wider block mb-1.5">
+                            Detected Skills
+                          </span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {detectSkills(candidateProfile?.resumeText || MOCK_CANDIDATE_RESUME).map((skill) => (
+                              <span key={skill} className="rounded bg-indigo-950/80 border border-indigo-850/50 px-2 py-0.5 text-[9px] font-semibold text-indigo-300">
+                                {skill}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                       {generatedQuestions.map((q) => {
                         const isSaved = savedQuestionIds.includes(q.id);
                         return (

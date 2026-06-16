@@ -113,7 +113,7 @@ export const History: React.FC = () => {
 
   return (
     <Layout>
-      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8 bg-[#fcfcfc]">
+      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="border-b border-slate-200 pb-5 mb-8">
           <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight">Session History</h1>
