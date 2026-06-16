@@ -449,6 +449,22 @@ export const updateSession = async (sessionId: string, updates: Partial<Session>
   }
 };
 
+/**
+ * Delete a session document.
+ * In real mode, deletes from Firestore. In mock mode, removes from local storage and dispatches a storage event.
+ */
+export const deleteSession = async (sessionId: string): Promise<void> => {
+  if (!MOCK_MODE) {
+    const docRef = doc(firestoreDb, 'sessions', sessionId);
+    await deleteDoc(docRef);
+  } else {
+    const sessions = getLocalData('im_sessions', []);
+    const updated = sessions.filter((s: Session) => s.id !== sessionId);
+    setLocalData('im_sessions', updated);
+    window.dispatchEvent(new Event('storage'));
+  }
+};
+
 export const joinSession = async (sessionId: string, guestId: string, guestName: string): Promise<void> => {
   await updateSession(sessionId, {
     guestId,

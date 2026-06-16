@@ -7,6 +7,7 @@ import {
   subscribeToUserSessions, 
   getUserFeedbackList,
   updateSession,
+  deleteSession,
   addToMatchmakingQueue,
   removeFromMatchmakingQueue,
   subscribeToQueueItem,
@@ -27,7 +28,7 @@ import {
   UserPlus, 
   MessageSquare,
   Sparkles,
-  Award
+  Award, MoreHorizontal
 } from 'lucide-react';
 
 const detectSkills = (text?: string): string[] => {
@@ -57,6 +58,9 @@ export const Dashboard: React.FC = () => {
   // Leaderboard State
   const [isOptedIn, setIsOptedIn] = useState(false);
   const [submittingOptIn, setSubmittingOptIn] = useState(false);
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const [isRescheduleMode, setIsRescheduleMode] = useState(false);
+  const [rescheduleSessionId, setRescheduleSessionId] = useState<string | null>(null);
 
   useEffect(() => {
     if (profile) {
@@ -421,50 +425,90 @@ export const Dashboard: React.FC = () => {
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2 sm:self-center shrink-0">
-                        {/* If no partner and host, show Invite sharing link */}
-                        {isHost && !hasPartner ? (
-                          <button
-                            onClick={() => handleCopyLink(session.inviteLink, session.id)}
-                            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-600 px-3.5 py-1.5 text-xs font-semibold transition-all cursor-pointer"
-                          >
-                            {copiedSessionId === session.id ? (
-                              <>
-                                <Check className="h-3.5 w-3.5 text-green-600" /> Copied Link
-                              </>
-                            ) : (
-                              <>
-                                <Copy className="h-3.5 w-3.5" /> Invite Link
-                              </>
+                          {/* If no partner and host, show Invite sharing link */}
+                          {isHost && !hasPartner && (
+                            <button
+                              onClick={() => handleCopyLink(session.inviteLink, session.id)}
+                              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-600 px-3.5 py-1.5 text-xs font-semibold transition-all cursor-pointer"
+                            >
+                              {copiedSessionId === session.id ? (
+                                <>
+                                  <Check className="h-3.5 w-3.5 text-green-600" /> Copied Link
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="h-3.5 w-3.5" /> Invite Link
+                                </>
+                              )}
+                            </button>
+                          )}
+
+                          {/* If guest is empty and current user is NOT host, allow joining from dashboard list */}
+                          {!isHost && !hasPartner && (
+                            <button
+                              onClick={async () => {
+                                if (!user) return;
+                                await updateSession(session.id, {
+                                  guestId: user.uid,
+                                  guestName: profile?.displayName || user.displayName || 'Guest',
+                                });
+                              }}
+                              className="inline-flex items-center gap-1 rounded-lg bg-teal-50 hover:bg-teal-100 text-brand px-3.5 py-1.5 text-xs font-bold transition-all cursor-pointer"
+                            >
+                              <UserPlus className="h-3.5 w-3.5" /> Join Session
+                            </button>
+                          )}
+
+                          {/* Main enter button for the room */}
+                          {(hasPartner || isHost) && (
+                            <button
+                              onClick={() => navigate(`/room/${session.id}`)}
+                              className="inline-flex items-center gap-1 rounded-lg bg-brand hover:bg-brand-hover text-white px-4 py-2 text-xs font-bold shadow-sm transition-all cursor-pointer"
+                            >
+                              Join Session <ArrowRight className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+
+                          {/* Dropdown menu for Reschedule / Cancel */}
+                          <div className="relative">
+                            <button
+                              onClick={() => setMenuOpenId(menuOpenId === session.id ? null : session.id)}
+                              className="p-1 hover:bg-slate-100 rounded-full"
+                            >
+                              <MoreHorizontal className="h-4 w-4" />
+                            </button>
+                            {menuOpenId === session.id && (
+                              <div className="absolute right-0 mt-2 w-40 bg-white border border-slate-200 rounded shadow-lg z-10">
+                                <button
+                                  onClick={() => {
+                                    setIsRescheduleMode(true);
+                                    setRescheduleSessionId(session.id);
+                                    setModalTopic(session.topic as any);
+                                    setModalDate(session.date);
+                                    setModalTime(session.time);
+                                    setModalDuration(session.duration as any);
+                                    setIsModalOpen(true);
+                                    setMenuOpenId(null);
+                                  }}
+                                  className="block w-full text-left px-3 py-2 text-sm hover:bg-slate-100"
+                                >
+                                  Reschedule
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    if (window.confirm('Are you sure you want to cancel this session?')) {
+                                      await deleteSession(session.id);
+                                    }
+                                    setMenuOpenId(null);
+                                  }}
+                                  className="block w-full text-left px-3 py-2 text-sm hover:bg-slate-100 text-red-600"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
                             )}
-                          </button>
-                        ) : null}
-
-                        {/* If guest is empty and current user is NOT host, allow joining from dashboard list */}
-                        {!isHost && !hasPartner ? (
-                          <button
-                            onClick={async () => {
-                              if (!user) return;
-                              await updateSession(session.id, {
-                                guestId: user.uid,
-                                guestName: profile?.displayName || user.displayName || 'Guest'
-                              });
-                            }}
-                            className="inline-flex items-center gap-1 rounded-lg bg-teal-50 hover:bg-teal-100 text-brand px-3.5 py-1.5 text-xs font-bold transition-all cursor-pointer"
-                          >
-                            <UserPlus className="h-3.5 w-3.5" /> Join Session
-                          </button>
-                        ) : null}
-
-                        {/* Main enter button for the room */}
-                        {hasPartner || isHost ? (
-                          <button
-                            onClick={() => navigate(`/room/${session.id}`)}
-                            className="inline-flex items-center gap-1 rounded-lg bg-brand hover:bg-brand-hover text-white px-4 py-2 text-xs font-bold shadow-sm transition-all cursor-pointer"
-                          >
-                            Join Session <ArrowRight className="h-3.5 w-3.5" />
-                          </button>
-                        ) : null}
-                      </div>
+                          </div>
+                        </div>
                     </div>
                   );
                 })}
