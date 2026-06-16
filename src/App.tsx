@@ -7,9 +7,9 @@ import { Dashboard } from './pages/Dashboard';
 import { InterviewRoom } from './pages/InterviewRoom';
 import { FeedbackDetails } from './pages/FeedbackDetails';
 import { History } from './pages/History';
-import { SoloInterview } from './pages/SoloInterview';
 import { Leaderboard } from './pages/Leaderboard';
 import { NotFound } from './pages/NotFound';
+import { SkillGapTracker } from './pages/SkillGapTracker';
 
 function App() {
   return (
@@ -79,15 +79,16 @@ function App() {
             } 
           />
 
-          {/* Solo AI Interview Route */}
+          {/* Skill Gap Tracker Route */}
           <Route 
-            path="/solo" 
+            path="/skills" 
             element={
               <ProtectedRoute requireOnboarded={true}>
-                <SoloInterview />
+                <SkillGapTracker />
               </ProtectedRoute>
             } 
           />
+
 
           {/* Fallback Route */}
           <Route path="*" element={<NotFound />} />

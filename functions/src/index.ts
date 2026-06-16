@@ -357,3 +357,171 @@ export const sendSessionReminders = functions.pubsub
     return null;
   });
 
+export const onSessionUpdate = functions.firestore
+  .document('sessions/{sessionId}')
+  .onUpdate(async (change, context) => {
+    const before = change.before.data();
+    const after = change.after.data();
+    if (!before || !after) return null;
+
+    // Check if date or time or duration changed
+    if (before.date !== after.date || before.time !== after.time || before.duration !== after.duration) {
+      const db = admin.firestore();
+      const resend = getResendClient();
+
+      const { hostId, guestId, topicDetail } = after;
+
+      // Fetch Host and Guest Profiles
+      const hostSnap = await db.collection('users').doc(hostId).get();
+      const guestSnap = guestId ? await db.collection('users').doc(guestId).get() : null;
+
+      const hostEmail = hostSnap.exists ? hostSnap.data()?.email : null;
+      const guestEmail = guestSnap && guestSnap.exists ? guestSnap.data()?.email : null;
+
+      const hostName = hostSnap.exists ? (hostSnap.data()?.displayName || 'Interviewer') : 'Interviewer';
+      const guestName = guestSnap && guestSnap.exists ? (guestSnap.data()?.displayName || 'Candidate') : 'Candidate';
+
+      const buildRescheduleHtml = (recipientName: string) => {
+        return `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
+            <div style="text-align: center; margin-bottom: 24px; border-bottom: 2px solid #006865; padding-bottom: 12px;">
+              <h2 style="color: #006865; margin: 0; font-size: 26px; font-weight: 800;">InterviewMate</h2>
+            </div>
+            <div style="background-color: #f8fafc; padding: 24px; border-radius: 8px; margin-bottom: 24px;">
+              <h3 style="color: #0f172a; margin-top: 0; font-size: 18px; font-weight: 700;">Interview Rescheduled</h3>
+              <p style="color: #334155; font-size: 14px; line-height: 1.5; margin-bottom: 16px;">
+                Hi <strong>${recipientName}</strong>,
+              </p>
+              <p style="color: #334155; font-size: 14px; line-height: 1.5; margin-bottom: 16px;">
+                Your scheduled mock interview session on <strong>${topicDetail || 'Technical Assessment'}</strong> has been rescheduled.
+              </p>
+              <p style="color: #334155; font-size: 14px; line-height: 1.5; margin-bottom: 8px;">
+                <strong>Previous Time:</strong> ${before.date} at ${before.time} (${before.duration} mins)
+              </p>
+              <p style="color: #334155; font-size: 14px; line-height: 1.5; margin-bottom: 24px;">
+                <strong>New Time:</strong> ${after.date} at ${after.time} (${after.duration} mins)
+              </p>
+              <div style="margin: 28px 0; text-align: center;">
+                <a href="${after.inviteLink}" style="background-color: #006865; color: #ffffff !important; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block; font-size: 14px; box-shadow: 0 4px 6px -1px rgba(0, 104, 101, 0.2);">
+                  View Updated Session
+                </a>
+              </div>
+            </div>
+            <div style="text-align: center; color: #64748b; font-size: 11px;">
+              &copy; 2026 InterviewMate. All rights reserved.
+            </div>
+          </div>
+        `;
+      };
+
+      const subject = `Rescheduled: Mock interview on ${topicDetail || 'Technical Assessment'}`;
+
+      if (hostEmail) {
+        const hostHtml = buildRescheduleHtml(hostName);
+        if (resend) {
+          await resend.emails.send({
+            from: 'InterviewMate <onboarding@resend.dev>',
+            to: hostEmail,
+            subject,
+            html: hostHtml
+          });
+        } else {
+          console.log(`[MOCK EMAIL to Host: ${hostEmail}] Subject: ${subject}\nBody: ${hostHtml}`);
+        }
+      }
+
+      if (guestEmail) {
+        const guestHtml = buildRescheduleHtml(guestName);
+        if (resend) {
+          await resend.emails.send({
+            from: 'InterviewMate <onboarding@resend.dev>',
+            to: guestEmail,
+            subject,
+            html: guestHtml
+          });
+        } else {
+          console.log(`[MOCK EMAIL to Guest: ${guestEmail}] Subject: ${subject}\nBody: ${guestHtml}`);
+        }
+      }
+    }
+    return null;
+  });
+
+export const onSessionDelete = functions.firestore
+  .document('sessions/{sessionId}')
+  .onDelete(async (snap, context) => {
+    const data = snap.data();
+    if (!data) return null;
+
+    const db = admin.firestore();
+    const resend = getResendClient();
+
+    const { hostId, guestId, topicDetail, date, time } = data;
+
+    // Fetch Host and Guest Profiles
+    const hostSnap = await db.collection('users').doc(hostId).get();
+    const guestSnap = guestId ? await db.collection('users').doc(guestId).get() : null;
+
+    const hostEmail = hostSnap.exists ? hostSnap.data()?.email : null;
+    const guestEmail = guestSnap && guestSnap.exists ? guestSnap.data()?.email : null;
+
+    const hostName = hostSnap.exists ? (hostSnap.data()?.displayName || 'Interviewer') : 'Interviewer';
+    const guestName = guestSnap && guestSnap.exists ? (guestSnap.data()?.displayName || 'Candidate') : 'Candidate';
+
+    const buildCancellationHtml = (recipientName: string, partnerName: string) => {
+      return `
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
+          <div style="text-align: center; margin-bottom: 24px; border-bottom: 2px solid #006865; padding-bottom: 12px;">
+            <h2 style="color: #006865; margin: 0; font-size: 26px; font-weight: 800;">InterviewMate</h2>
+          </div>
+          <div style="background-color: #f8fafc; padding: 24px; border-radius: 8px; margin-bottom: 24px;">
+            <h3 style="color: #ef4444; margin-top: 0; font-size: 18px; font-weight: 700;">Session Cancelled</h3>
+            <p style="color: #334155; font-size: 14px; line-height: 1.5; margin-bottom: 16px;">
+              Hi <strong>${recipientName}</strong>,
+            </p>
+            <p style="color: #334155; font-size: 14px; line-height: 1.5; margin-bottom: 16px;">
+              The scheduled mock interview session on <strong>${topicDetail || 'Technical Assessment'}</strong> at <strong>${date} at ${time}</strong> has been cancelled.
+            </p>
+            <p style="color: #334155; font-size: 14px; line-height: 1.5; margin-bottom: 24px;">
+              You can log back into InterviewMate to find and schedule a new session with another peer.
+            </p>
+          </div>
+          <div style="text-align: center; color: #64748b; font-size: 11px;">
+            &copy; 2026 InterviewMate. All rights reserved.
+          </div>
+        </div>
+      `;
+    };
+
+    const subject = `Cancelled: Mock interview on ${topicDetail || 'Technical Assessment'}`;
+
+    if (hostEmail) {
+      const hostHtml = buildCancellationHtml(hostName, guestName);
+      if (resend) {
+        await resend.emails.send({
+          from: 'InterviewMate <onboarding@resend.dev>',
+          to: hostEmail,
+          subject,
+          html: hostHtml
+        });
+      } else {
+        console.log(`[MOCK EMAIL to Host: ${hostEmail}] Subject: ${subject}\nBody: ${hostHtml}`);
+      }
+    }
+
+    if (guestEmail) {
+      const guestHtml = buildCancellationHtml(guestName, hostName);
+      if (resend) {
+        await resend.emails.send({
+          from: 'InterviewMate <onboarding@resend.dev>',
+          to: guestEmail,
+          subject,
+          html: guestHtml
+        });
+      } else {
+        console.log(`[MOCK EMAIL to Guest: ${guestEmail}] Subject: ${subject}\nBody: ${guestHtml}`);
+      }
+    }
+
+    return null;
+  });

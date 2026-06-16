@@ -39,8 +39,15 @@ const detectSkills = (text?: string): string[] => {
     'HTML', 'CSS', 'Tailwind', 'Next.js', 'TensorFlow', 'PyTorch', 'Git', 'Kubernetes'
   ];
   return skillsList.filter(skill => {
-    const regex = new RegExp(`\\b${skill.replace('.', '\\.')}\\b`, 'i');
-    return regex.test(text);
+    try {
+      const escaped = skill.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+      const startBoundary = /^\w/.test(skill) ? '\\b' : '';
+      const endBoundary = /\w$/.test(skill) ? '\\b' : '';
+      const regex = new RegExp(`${startBoundary}${escaped}${endBoundary}`, 'i');
+      return regex.test(text);
+    } catch (e) {
+      return false;
+    }
   });
 };
 
@@ -62,6 +69,7 @@ export const Dashboard: React.FC = () => {
   const [isRescheduleMode, setIsRescheduleMode] = useState(false);
   const [rescheduleSessionId, setRescheduleSessionId] = useState<string | null>(null);
 
+
   useEffect(() => {
     if (profile) {
       setIsOptedIn(!!profile.optedInLeaderboard);
@@ -78,16 +86,20 @@ export const Dashboard: React.FC = () => {
 
     setIsParsingResume(true);
     try {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = async () => {
-        const resultStr = reader.result as string;
-        const base64Data = resultStr.split(',')[1];
-        if (user) {
-          const parsedText = await uploadAndParseResume(user.uid, base64Data);
-          await updateProfile({ resumeText: parsedText });
-        }
-      };
+      // Read file as base64 using a Promise to await completion
+      const base64Data = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const resultStr = reader.result as string;
+          resolve(resultStr.split(',')[1]);
+        };
+        reader.onerror = (ev) => reject(ev);
+        reader.readAsDataURL(file);
+      });
+      if (user) {
+        const parsedText = await uploadAndParseResume(user.uid, base64Data);
+        await updateProfile({ resumeText: parsedText });
+      }
     } catch (err) {
       console.error(err);
       alert("Failed to parse and upload resume.");
@@ -187,27 +199,39 @@ export const Dashboard: React.FC = () => {
       modalTopic === 'Frontend' ? 'Frontend Development' : 'HR & Behavioural';
 
     try {
-      await createSession({
-        topic: modalTopic,
-        topicDetail,
-        date: modalDate,
-        time: modalTime,
-        duration: modalDuration,
-        hostId: user.uid,
-        hostName: profile?.displayName || user.displayName || 'Host',
-        guestId: null,
-        guestName: null,
-      });
+      if (isRescheduleMode && rescheduleSessionId) {
+        await updateSession(rescheduleSessionId, {
+          topic: modalTopic,
+          topicDetail,
+          date: modalDate,
+          time: modalTime,
+          duration: modalDuration,
+        });
+      } else {
+        await createSession({
+          topic: modalTopic,
+          topicDetail,
+          date: modalDate,
+          time: modalTime,
+          duration: modalDuration,
+          hostId: user.uid,
+          hostName: profile?.displayName || user.displayName || 'Host',
+          guestId: null,
+          guestName: null,
+        });
+      }
 
       // Reset Modal
       setIsModalOpen(false);
+      setIsRescheduleMode(false);
+      setRescheduleSessionId(null);
       setModalDate('');
       setModalTime('');
       setModalDuration(45);
       setGeneratedSessionId('');
     } catch (err) {
       console.error(err);
-      alert("Failed to create session");
+      alert(isRescheduleMode ? "Failed to reschedule session" : "Failed to create session");
     }
   };
 
@@ -386,7 +410,15 @@ export const Dashboard: React.FC = () => {
                 <h3 className="mt-4 text-sm font-semibold text-slate-700">No scheduled sessions</h3>
                 <p className="mt-1 text-xs text-slate-500">Create a session and share the invite link to start mock interviews.</p>
                 <button
-                  onClick={() => setIsModalOpen(true)}
+                  onClick={() => {
+                    setIsRescheduleMode(false);
+                    setRescheduleSessionId(null);
+                    setModalDate('');
+                    setModalTime('');
+                    setModalDuration(45);
+                    setGeneratedSessionId(Math.random().toString(36).substring(2, 7) + '-' + Math.random().toString(36).substring(2, 7));
+                    setIsModalOpen(true);
+                  }}
                   className="mt-4 inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover cursor-pointer"
                 >
                   <Plus className="h-4 w-4" /> Schedule Session
@@ -469,45 +501,46 @@ export const Dashboard: React.FC = () => {
                             </button>
                           )}
 
-                          {/* Dropdown menu for Reschedule / Cancel */}
-                          <div className="relative">
-                            <button
-                              onClick={() => setMenuOpenId(menuOpenId === session.id ? null : session.id)}
-                              className="p-1 hover:bg-slate-100 rounded-full"
-                            >
-                              <MoreHorizontal className="h-4 w-4" />
-                            </button>
-                            {menuOpenId === session.id && (
-                              <div className="absolute right-0 mt-2 w-40 bg-white border border-slate-200 rounded shadow-lg z-10">
-                                <button
-                                  onClick={() => {
-                                    setIsRescheduleMode(true);
-                                    setRescheduleSessionId(session.id);
-                                    setModalTopic(session.topic as any);
-                                    setModalDate(session.date);
-                                    setModalTime(session.time);
-                                    setModalDuration(session.duration as any);
-                                    setIsModalOpen(true);
-                                    setMenuOpenId(null);
-                                  }}
-                                  className="block w-full text-left px-3 py-2 text-sm hover:bg-slate-100"
-                                >
-                                  Reschedule
-                                </button>
-                                <button
-                                  onClick={async () => {
-                                    if (window.confirm('Are you sure you want to cancel this session?')) {
-                                      await deleteSession(session.id);
-                                    }
-                                    setMenuOpenId(null);
-                                  }}
-                                  className="block w-full text-left px-3 py-2 text-sm hover:bg-slate-100 text-red-600"
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            )}
-                          </div>
+                           {/* Dropdown menu for Reschedule / Cancel */}
+                           <div className="relative font-sans">
+                             <button
+                               onClick={() => setMenuOpenId(menuOpenId === session.id ? null : session.id)}
+                               className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-650 dark:hover:text-slate-200 rounded-full transition-colors cursor-pointer"
+                             >
+                               <MoreHorizontal className="h-4 w-4" />
+                             </button>
+                             {menuOpenId === session.id && (
+                               <div className="absolute right-0 mt-2 w-40 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg z-10 overflow-hidden">
+                                 <button
+                                   onClick={() => {
+                                     setIsRescheduleMode(true);
+                                     setRescheduleSessionId(session.id);
+                                     setModalTopic(session.topic as any);
+                                     setModalDate(session.date);
+                                     setModalTime(session.time);
+                                     setModalDuration(session.duration as any);
+                                     setGeneratedSessionId(session.id);
+                                     setIsModalOpen(true);
+                                     setMenuOpenId(null);
+                                   }}
+                                   className="block w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-750 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                                 >
+                                   Reschedule
+                                 </button>
+                                 <button
+                                   onClick={async () => {
+                                     if (window.confirm("Are you sure? Your partner will be notified.")) {
+                                       await deleteSession(session.id);
+                                     }
+                                     setMenuOpenId(null);
+                                   }}
+                                   className="block w-full text-left px-4 py-2.5 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-slate-50 dark:hover:bg-slate-700 border-t border-slate-100 dark:border-slate-700 transition-colors cursor-pointer"
+                                 >
+                                   Cancel
+                                 </button>
+                               </div>
+                             )}
+                           </div>
                         </div>
                     </div>
                   );
@@ -692,7 +725,15 @@ export const Dashboard: React.FC = () => {
                 Book a peer interview or professional review session today to perfect your system design and coding skills.
               </p>
               <button
-                onClick={() => setIsModalOpen(true)}
+                onClick={() => {
+                  setIsRescheduleMode(false);
+                  setRescheduleSessionId(null);
+                  setModalDate('');
+                  setModalTime('');
+                  setModalDuration(45);
+                  setGeneratedSessionId(Math.random().toString(36).substring(2, 7) + '-' + Math.random().toString(36).substring(2, 7));
+                  setIsModalOpen(true);
+                }}
                 className="mt-6 flex w-full items-center justify-center gap-2 rounded-lg bg-[#99f6e4] hover:bg-[#5eead4] text-slate-900 py-2.5 text-sm font-bold shadow-sm transition-all cursor-pointer"
               >
                 <Plus className="h-4 w-4" /> Schedule New Session
@@ -754,15 +795,33 @@ export const Dashboard: React.FC = () => {
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
           {/* Overlay click to close */}
-          <div className="fixed inset-0" onClick={() => setIsModalOpen(false)}></div>
+          <div className="fixed inset-0" onClick={() => {
+            setIsModalOpen(false);
+            setIsRescheduleMode(false);
+            setRescheduleSessionId(null);
+            setModalDate('');
+            setModalTime('');
+            setModalDuration(45);
+            setGeneratedSessionId('');
+          }}></div>
 
           {/* Modal Card */}
           <div className="relative w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl z-10 transition-all scale-100">
             {/* Header */}
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-lg font-bold text-slate-800">Schedule a session</h3>
+              <h3 className="text-lg font-bold text-slate-800">
+                {isRescheduleMode ? 'Reschedule session' : 'Schedule a session'}
+              </h3>
               <button 
-                onClick={() => setIsModalOpen(false)}
+                onClick={() => {
+                  setIsModalOpen(false);
+                  setIsRescheduleMode(false);
+                  setRescheduleSessionId(null);
+                  setModalDate('');
+                  setModalTime('');
+                  setModalDuration(45);
+                  setGeneratedSessionId('');
+                }}
                 className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-all focus:outline-none"
               >
                 <Plus className="h-5 w-5 rotate-45" />
@@ -863,7 +922,15 @@ export const Dashboard: React.FC = () => {
               <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
+                  onClick={() => {
+                    setIsModalOpen(false);
+                    setIsRescheduleMode(false);
+                    setRescheduleSessionId(null);
+                    setModalDate('');
+                    setModalTime('');
+                    setModalDuration(45);
+                    setGeneratedSessionId('');
+                  }}
                   className="rounded-lg border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
                 >
                   Cancel

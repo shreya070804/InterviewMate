@@ -49,8 +49,15 @@ const detectSkills = (text?: string): string[] => {
     'HTML', 'CSS', 'Tailwind', 'Next.js', 'TensorFlow', 'PyTorch', 'Git', 'Kubernetes'
   ];
   return skillsList.filter(skill => {
-    const regex = new RegExp(`\\b${skill.replace('.', '\\.')}\\b`, 'i');
-    return regex.test(text);
+    try {
+      const escaped = skill.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+      const startBoundary = /^\w/.test(skill) ? '\\b' : '';
+      const endBoundary = /\w$/.test(skill) ? '\\b' : '';
+      const regex = new RegExp(`${startBoundary}${escaped}${endBoundary}`, 'i');
+      return regex.test(text);
+    } catch (e) {
+      return false;
+    }
   });
 };
 

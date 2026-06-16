@@ -24,7 +24,7 @@ import {
   deleteDoc
 } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import type { UserProfile, Session, Question, Feedback } from './types';
+import type { UserProfile, Session, Question, Feedback, QuestionPack } from './types';
 
 
 // Environment variables
