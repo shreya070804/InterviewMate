@@ -1057,4 +1057,30 @@ export const subscribeToChatMessages = (
   }
 };
 
+export const submitUserFeedback = async (feedback: {
+  type: 'bug' | 'feature';
+  message: string;
+  userId: string;
+  userEmail: string;
+  currentPage: string;
+}): Promise<void> => {
+  if (!MOCK_MODE) {
+    const collRef = collection(firestoreDb, 'user_feedback');
+    await addDoc(collRef, {
+      ...feedback,
+      createdAt: serverTimestamp()
+    });
+  } else {
+    const allFeedback = getLocalData('im_user_feedback', []);
+    allFeedback.push({
+      ...feedback,
+      id: Math.random().toString(36).substring(2, 11),
+      createdAt: new Date().toISOString()
+    });
+    setLocalData('im_user_feedback', allFeedback);
+    window.dispatchEvent(new Event('storage'));
+  }
+};
+
+
 
