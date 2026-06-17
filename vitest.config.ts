@@ -7,11 +7,5 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: './vitest.setup.ts',
-    threads: {
-      singleThread: true,
-    },
-    forks: {
-      singleFork: true,
-    },
   },
 })

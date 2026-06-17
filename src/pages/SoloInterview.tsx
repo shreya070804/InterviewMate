@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { saveSoloSession, saveFeedback, checkApiUsage, incrementApiUsage, showToast } from '../firebase';
+import * as Sentry from '@sentry/react';
 import { Layout } from '../components/Layout';
 import Editor from '@monaco-editor/react';
 import { 
@@ -215,6 +216,7 @@ export const SoloInterview: React.FC = () => {
         }
       } catch (err) {
         console.warn('Evaluation call failed/timed out, using simulation:', err);
+        Sentry.captureException(err, { tags: { feature: 'feedback-generation' } });
         signal = simulateDifficultyAssessment(userText, code);
       }
     } else {
@@ -327,6 +329,7 @@ export const SoloInterview: React.FC = () => {
 
       } catch (err) {
         console.error('Claude stream API failed, falling back to simulated chat stream:', err);
+        Sentry.captureException(err, { tags: { feature: 'feedback-generation' } });
       }
     }
 
@@ -437,6 +440,7 @@ export const SoloInterview: React.FC = () => {
       } catch (err) {
         clearTimeout(timeoutId);
         console.warn('Judge0 API failed, falling back to local JS simulation:', err);
+        Sentry.captureException(err, { tags: { feature: 'code-execution' } });
       }
     }
 

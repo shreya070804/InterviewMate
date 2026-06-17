@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import * as Sentry from '@sentry/react';
 import { 
   subscribeToSession, 
   updateSession, 
@@ -587,6 +588,7 @@ export const InterviewRoom: React.FC = () => {
       } catch (err) {
         clearTimeout(timeoutId);
         console.warn('Judge0 API failed, utilizing local code execution simulator:', err);
+        Sentry.captureException(err, { tags: { feature: 'code-execution' } });
       }
     }
 
@@ -860,6 +862,7 @@ export const InterviewRoom: React.FC = () => {
         }
       } catch (err) {
         console.warn("Claude voice evaluation failed, utilizing offline evaluator:", err);
+        Sentry.captureException(err, { tags: { feature: 'feedback-generation' } });
       }
     }
 
@@ -1018,6 +1021,7 @@ export const InterviewRoom: React.FC = () => {
         }
       } catch (err: any) {
         console.warn("Claude question generation failed, using local fallback:", err);
+        Sentry.captureException(err, { tags: { feature: 'question-generation' } });
         setGenError(err.message || "Failed to generate questions. Click Retry to try again.");
         setIsGenerating(false);
         return;

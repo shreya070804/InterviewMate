@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Layout } from '../components/Layout';
 import { getUserFeedbackList, checkApiUsage, incrementApiUsage, showToast } from '../firebase';
+import * as Sentry from '@sentry/react';
 import { WeakAreaCard } from '../components/WeakAreaCard';
 import type { Feedback } from '../types';
 import { Brain, Sparkles, RefreshCw, AlertCircle } from 'lucide-react';
@@ -123,6 +124,7 @@ export const SkillGapTracker: React.FC = () => {
           }
         } catch (err: any) {
           console.warn('Claude API failed to fetch skill gaps, using local analysis fallback:', err);
+          Sentry.captureException(err, { tags: { feature: 'feedback-generation' } });
           if (err.message && err.message.includes('limit reached')) {
             showToast(err.message, 'error');
           }

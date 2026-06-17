@@ -24,10 +24,32 @@ import {
   deleteDoc,
   addDoc,
   orderBy,
-  connectFirestoreEmulator
+  connectFirestoreEmulator,
+  limit
 } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import type { UserProfile, Session, Question, Feedback, QuestionPack } from './types';
+import * as Sentry from '@sentry/react';
+
+const lastReadTimes: Record<string, number> = {};
+
+export const trackFirestoreRead = (key: string) => {
+  if (import.meta.env.DEV) {
+    const now = Date.now();
+    const lastRead = lastReadTimes[key];
+    if (lastRead && (now - lastRead) < 2000) {
+      console.warn(`[Firestore Read Warning] Firestore read for "${key}" occurred outside expected patterns (twice within ${now - lastRead}ms). This might indicate an unnecessary component re-render. Check the call stack.`);
+    }
+    lastReadTimes[key] = now;
+  }
+};
+
+export const isAdmin = (email: string | null | undefined): boolean => {
+  if (!email) return false;
+  const adminEmailsStr = (import.meta.env.VITE_ADMIN_EMAILS || 'admin@interviewmate.com,shreya@example.com') as string;
+  const adminEmails = adminEmailsStr.split(',').map((e: string) => e.trim().toLowerCase());
+  return adminEmails.includes(email.toLowerCase().trim());
+};
 
 
 // Environment variables
@@ -339,7 +361,12 @@ export const registerWithEmail = async (email: string, password: string, name: s
       onboarded: false,
       createdAt: new Date().toISOString()
     };
-    await setDoc(doc(firestoreDb, 'users', user.uid), profile);
+    try {
+      await setDoc(doc(firestoreDb, 'users', user.uid), profile);
+    } catch (err) {
+      Sentry.captureException(err, { tags: { feature: 'auth' } });
+      throw err;
+    }
     
     return {
       uid: user.uid,
@@ -403,6 +430,7 @@ export const logoutUser = async (): Promise<void> => {
 // ----------------------------------------------------
 
 export const getUserProfile = async (uid: string): Promise<UserProfile | null> => {
+  trackFirestoreRead(`getUserProfile: ${uid}`);
   if (!MOCK_MODE) {
     const docRef = doc(firestoreDb, 'users', uid);
     const docSnap = await getDoc(docRef);
@@ -415,8 +443,13 @@ export const getUserProfile = async (uid: string): Promise<UserProfile | null> =
 
 export const saveUserProfile = async (uid: string, profile: Partial<UserProfile>): Promise<void> => {
   if (!MOCK_MODE) {
-    const docRef = doc(firestoreDb, 'users', uid);
-    await setDoc(docRef, profile, { merge: true });
+    try {
+      const docRef = doc(firestoreDb, 'users', uid);
+      await setDoc(docRef, profile, { merge: true });
+    } catch (err) {
+      Sentry.captureException(err, { tags: { feature: 'user-profile' } });
+      throw err;
+    }
   } else {
     const users = getLocalData('im_users', {});
     const existing = users[uid] || { uid, onboarded: false };
@@ -440,11 +473,16 @@ export const createSession = async (session: Omit<Session, 'id' | 'createdAt' | 
   };
 
   if (!MOCK_MODE) {
-    await setDoc(doc(firestoreDb, 'sessions', sessionId), {
-      ...newSession,
-      createdAt: serverTimestamp()
-    });
-    return newSession;
+    try {
+      await setDoc(doc(firestoreDb, 'sessions', sessionId), {
+        ...newSession,
+        createdAt: serverTimestamp()
+      });
+      return newSession;
+    } catch (err) {
+      Sentry.captureException(err, { tags: { feature: 'session-scheduling' } });
+      throw err;
+    }
   } else {
     const sessions = getLocalData('im_sessions', []);
     sessions.push(newSession);
@@ -455,8 +493,13 @@ export const createSession = async (session: Omit<Session, 'id' | 'createdAt' | 
 
 export const updateSession = async (sessionId: string, updates: Partial<Session>): Promise<void> => {
   if (!MOCK_MODE) {
-    const docRef = doc(firestoreDb, 'sessions', sessionId);
-    await updateDoc(docRef, updates);
+    try {
+      const docRef = doc(firestoreDb, 'sessions', sessionId);
+      await updateDoc(docRef, updates);
+    } catch (err) {
+      Sentry.captureException(err, { tags: { feature: 'session-scheduling' } });
+      throw err;
+    }
   } else {
     const sessions = getLocalData('im_sessions', []);
     const updated = sessions.map((s: Session) => s.id === sessionId ? { ...s, ...updates } : s);
@@ -472,8 +515,13 @@ export const updateSession = async (sessionId: string, updates: Partial<Session>
  */
 export const deleteSession = async (sessionId: string): Promise<void> => {
   if (!MOCK_MODE) {
-    const docRef = doc(firestoreDb, 'sessions', sessionId);
-    await deleteDoc(docRef);
+    try {
+      const docRef = doc(firestoreDb, 'sessions', sessionId);
+      await deleteDoc(docRef);
+    } catch (err) {
+      Sentry.captureException(err, { tags: { feature: 'session-scheduling' } });
+      throw err;
+    }
   } else {
     const sessions = getLocalData('im_sessions', []);
     const updated = sessions.filter((s: Session) => s.id !== sessionId);
@@ -490,6 +538,7 @@ export const joinSession = async (sessionId: string, guestId: string, guestName:
 };
 
 export const subscribeToSession = (sessionId: string, callback: (session: Session | null) => void) => {
+  trackFirestoreRead(`subscribeToSession: ${sessionId}`);
   if (!MOCK_MODE) {
     const docRef = doc(firestoreDb, 'sessions', sessionId);
     return onSnapshot(docRef, (docSnap) => {
@@ -524,6 +573,7 @@ export const subscribeToSession = (sessionId: string, callback: (session: Sessio
 };
 
 export const subscribeToUserSessions = (userId: string, callback: (sessions: Session[]) => void) => {
+  trackFirestoreRead(`subscribeToUserSessions: ${userId}`);
   if (!MOCK_MODE) {
     const collRef = collection(firestoreDb, 'sessions');
     // Read all where hostId = userId OR guestId = userId
@@ -604,13 +654,18 @@ const QUESTION_PACKS: QuestionPack[] = [
  * In real mode it reads from the `question_packs` collection; in mock mode it returns the hard‑coded list.
  */
 export const getQuestionPacks = async (): Promise<QuestionPack[]> => {
+  trackFirestoreRead('getQuestionPacks');
   if (!MOCK_MODE) {
     const collRef = collection(firestoreDb, 'question_packs');
     const snap = await getDocs(collRef);
     if (snap.empty) {
       // Seed the packs on first call
       for (const pack of QUESTION_PACKS) {
-        await setDoc(doc(firestoreDb, 'question_packs', pack.id), pack);
+        try {
+          await setDoc(doc(firestoreDb, 'question_packs', pack.id), pack);
+        } catch (err) {
+          Sentry.captureException(err, { tags: { feature: 'question-generation' } });
+        }
       }
       return QUESTION_PACKS;
     }
@@ -622,13 +677,18 @@ export const getQuestionPacks = async (): Promise<QuestionPack[]> => {
 };
 
 export const getQuestions = async (): Promise<Question[]> => {
+  trackFirestoreRead('getQuestions');
   if (!MOCK_MODE) {
     const collRef = collection(firestoreDb, 'questions');
     const snap = await getDocs(collRef);
     if (snap.empty) {
       // Seed Firestore
       for (const q of PRE_SEEDED_QUESTIONS) {
-        await setDoc(doc(firestoreDb, 'questions', q.id), q);
+        try {
+          await setDoc(doc(firestoreDb, 'questions', q.id), q);
+        } catch (err) {
+          Sentry.captureException(err, { tags: { feature: 'question-generation' } });
+        }
       }
       return PRE_SEEDED_QUESTIONS;
     }
@@ -644,10 +704,15 @@ export const getQuestions = async (): Promise<Question[]> => {
 
 export const saveFeedback = async (feedback: Feedback): Promise<void> => {
   if (!MOCK_MODE) {
-    await setDoc(doc(firestoreDb, 'feedback', feedback.sessionId), {
-      ...feedback,
-      createdAt: serverTimestamp()
-    });
+    try {
+      await setDoc(doc(firestoreDb, 'feedback', feedback.sessionId), {
+        ...feedback,
+        createdAt: serverTimestamp()
+      });
+    } catch (err) {
+      Sentry.captureException(err, { tags: { feature: 'feedback-generation' } });
+      throw err;
+    }
   } else {
     const allFeedback = getLocalData('im_feedback', []);
     // check if feedback already exists
@@ -662,6 +727,7 @@ export const saveFeedback = async (feedback: Feedback): Promise<void> => {
 };
 
 export const getFeedback = async (sessionId: string): Promise<Feedback | null> => {
+  trackFirestoreRead(`getFeedback: ${sessionId}`);
   if (!MOCK_MODE) {
     const docRef = doc(firestoreDb, 'feedback', sessionId);
     const docSnap = await getDoc(docRef);
@@ -673,6 +739,7 @@ export const getFeedback = async (sessionId: string): Promise<Feedback | null> =
 };
 
 export const getUserFeedbackList = async (userId: string): Promise<Feedback[]> => {
+  trackFirestoreRead(`getUserFeedbackList: ${userId}`);
   if (!MOCK_MODE) {
     const collRef = collection(firestoreDb, 'feedback');
     const q = query(collRef, where('userId', '==', userId));
@@ -690,8 +757,13 @@ export const getUserFeedbackList = async (userId: string): Promise<Feedback[]> =
 
 export const saveQuestion = async (question: Question): Promise<void> => {
   if (!MOCK_MODE) {
-    const docRef = doc(firestoreDb, 'questions', question.id);
-    await setDoc(docRef, question);
+    try {
+      const docRef = doc(firestoreDb, 'questions', question.id);
+      await setDoc(docRef, question);
+    } catch (err) {
+      Sentry.captureException(err, { tags: { feature: 'question-generation' } });
+      throw err;
+    }
   } else {
     const questionsList = getLocalData('im_questions', PRE_SEEDED_QUESTIONS);
     if (!questionsList.some((q: Question) => q.id === question.id)) {
@@ -704,11 +776,16 @@ export const saveQuestion = async (question: Question): Promise<void> => {
 
 export const saveSoloSession = async (session: any): Promise<void> => {
   if (!MOCK_MODE) {
-    const docRef = doc(firestoreDb, 'solo_sessions', session.id);
-    await setDoc(docRef, {
-      ...session,
-      createdAt: serverTimestamp()
-    });
+    try {
+      const docRef = doc(firestoreDb, 'solo_sessions', session.id);
+      await setDoc(docRef, {
+        ...session,
+        createdAt: serverTimestamp()
+      });
+    } catch (err) {
+      Sentry.captureException(err, { tags: { feature: 'solo-interview' } });
+      throw err;
+    }
   } else {
     const allSolo = getLocalData('im_solo_sessions', []);
     allSolo.push(session);
@@ -718,6 +795,7 @@ export const saveSoloSession = async (session: any): Promise<void> => {
 };
 
 export const getUserSoloSessions = async (userId: string): Promise<any[]> => {
+  trackFirestoreRead(`getUserSoloSessions: ${userId}`);
   if (!MOCK_MODE) {
     const collRef = collection(firestoreDb, 'solo_sessions');
     const q = query(collRef, where('userId', '==', userId));
@@ -741,9 +819,14 @@ export const addToMatchmakingQueue = async (userId: string, topic: string, displ
   };
 
   if (!MOCK_MODE) {
-    const docRef = doc(firestoreDb, 'matchmaking_queue', queueId);
-    await setDoc(docRef, queueDoc);
-    return queueId;
+    try {
+      const docRef = doc(firestoreDb, 'matchmaking_queue', queueId);
+      await setDoc(docRef, queueDoc);
+      return queueId;
+    } catch (err) {
+      Sentry.captureException(err, { tags: { feature: 'matchmaking' } });
+      throw err;
+    }
   } else {
     const queue = getLocalData('im_matchmaking_queue', {});
     queue[queueId] = queueDoc;
@@ -811,8 +894,13 @@ export const addToMatchmakingQueue = async (userId: string, topic: string, displ
 
 export const removeFromMatchmakingQueue = async (queueId: string): Promise<void> => {
   if (!MOCK_MODE) {
-    const docRef = doc(firestoreDb, 'matchmaking_queue', queueId);
-    await deleteDoc(docRef);
+    try {
+      const docRef = doc(firestoreDb, 'matchmaking_queue', queueId);
+      await deleteDoc(docRef);
+    } catch (err) {
+      Sentry.captureException(err, { tags: { feature: 'matchmaking' } });
+      throw err;
+    }
   } else {
     const queue = getLocalData('im_matchmaking_queue', {});
     delete queue[queueId];
@@ -822,6 +910,7 @@ export const removeFromMatchmakingQueue = async (queueId: string): Promise<void>
 };
 
 export const subscribeToQueueItem = (queueId: string, callback: (data: any) => void) => {
+  trackFirestoreRead(`subscribeToQueueItem: ${queueId}`);
   if (!MOCK_MODE) {
     const docRef = doc(firestoreDb, 'matchmaking_queue', queueId);
     return onSnapshot(docRef, (docSnap) => {
@@ -961,15 +1050,20 @@ export const triggerMockLeaderboardCalculation = async (userId: string): Promise
 
 export const optInToLeaderboard = async (userId: string, optedIn: boolean, displayName: string): Promise<void> => {
   if (!MOCK_MODE) {
-    await setDoc(doc(firestoreDb, 'leaderboard_opt_in', userId), {
-      optedIn,
-      userId,
-      displayName,
-      updatedAt: serverTimestamp()
-    });
-    await updateDoc(doc(firestoreDb, 'users', userId), {
-      optedInLeaderboard: optedIn
-    });
+    try {
+      await setDoc(doc(firestoreDb, 'leaderboard_opt_in', userId), {
+        optedIn,
+        userId,
+        displayName,
+        updatedAt: serverTimestamp()
+      });
+      await updateDoc(doc(firestoreDb, 'users', userId), {
+        optedInLeaderboard: optedIn
+      });
+    } catch (err) {
+      Sentry.captureException(err, { tags: { feature: 'leaderboard' } });
+      throw err;
+    }
   } else {
     const optIns = getLocalData('im_leaderboard_opt_in', {});
     optIns[userId] = { optedIn, userId, displayName };
@@ -988,6 +1082,7 @@ export const optInToLeaderboard = async (userId: string, optedIn: boolean, displ
 };
 
 export const getWeeklyLeaderboard = async (): Promise<any[]> => {
+  trackFirestoreRead('getWeeklyLeaderboard');
   if (!MOCK_MODE) {
     const collRef = collection(firestoreDb, 'weekly_leaderboard');
     const snap = await getDocs(collRef);
@@ -1012,13 +1107,18 @@ export const sendChatMessage = async (
   senderName: string
 ): Promise<void> => {
   if (!MOCK_MODE) {
-    const collRef = collection(firestoreDb, 'sessions', sessionId, 'messages');
-    await addDoc(collRef, {
-      text,
-      senderId,
-      senderName,
-      timestamp: serverTimestamp()
-    });
+    try {
+      const collRef = collection(firestoreDb, 'sessions', sessionId, 'messages');
+      await addDoc(collRef, {
+        text,
+        senderId,
+        senderName,
+        timestamp: serverTimestamp()
+      });
+    } catch (err) {
+      Sentry.captureException(err, { tags: { feature: 'chat' } });
+      throw err;
+    }
   } else {
     const key = `im_session_messages_${sessionId}`;
     const messages = getLocalData(key, []);
@@ -1038,6 +1138,7 @@ export const subscribeToChatMessages = (
   sessionId: string,
   callback: (messages: any[]) => void
 ) => {
+  trackFirestoreRead(`subscribeToChatMessages: ${sessionId}`);
   if (!MOCK_MODE) {
     const collRef = collection(firestoreDb, 'sessions', sessionId, 'messages');
     const q = query(collRef, orderBy('timestamp', 'asc'));
@@ -1080,11 +1181,16 @@ export const submitUserFeedback = async (feedback: {
   currentPage: string;
 }): Promise<void> => {
   if (!MOCK_MODE) {
-    const collRef = collection(firestoreDb, 'user_feedback');
-    await addDoc(collRef, {
-      ...feedback,
-      createdAt: serverTimestamp()
-    });
+    try {
+      const collRef = collection(firestoreDb, 'user_feedback');
+      await addDoc(collRef, {
+        ...feedback,
+        createdAt: serverTimestamp()
+      });
+    } catch (err) {
+      Sentry.captureException(err, { tags: { feature: 'user-feedback' } });
+      throw err;
+    }
   } else {
     const allFeedback = getLocalData('im_user_feedback', []);
     allFeedback.push({
@@ -1179,6 +1285,7 @@ export const incrementApiUsage = async (userId: string): Promise<void> => {
 };
 
 export const subscribeToApiUsage = (userId: string, callback: (data: any) => void) => {
+  trackFirestoreRead(`subscribeToApiUsage: ${userId}`);
   if (!MOCK_MODE) {
     const docRef = doc(firestoreDb, 'api_usage', userId);
     return onSnapshot(docRef, (docSnap) => {
@@ -1202,6 +1309,141 @@ export const subscribeToApiUsage = (userId: string, callback: (data: any) => voi
       window.removeEventListener('storage', checkUsage);
       clearInterval(intervalId);
     };
+  }
+};
+
+// ----------------------------------------------------
+// ADMIN DASHBOARD QUERY APIs
+// ----------------------------------------------------
+
+export interface AdminMetrics {
+  totalUsers: number;
+  totalSessionsCompleted: number;
+  totalAICallsToday: number;
+  averageScore: number;
+}
+
+export const getAdminMetrics = async (): Promise<AdminMetrics> => {
+  trackFirestoreRead('getAdminMetrics');
+  if (!MOCK_MODE) {
+    try {
+      const usersSnap = await getDocs(collection(firestoreDb, 'users'));
+      const feedbackSnap = await getDocs(collection(firestoreDb, 'feedback'));
+      const apiUsageSnap = await getDocs(collection(firestoreDb, 'api_usage'));
+
+      const totalUsers = usersSnap.size;
+      const totalSessionsCompleted = feedbackSnap.size;
+
+      let totalAICallsToday = 0;
+      apiUsageSnap.forEach(doc => {
+        const data = doc.data();
+        totalAICallsToday += data.claudeCallsToday || 0;
+      });
+
+      let totalScore = 0;
+      let scoreCount = 0;
+      feedbackSnap.forEach(doc => {
+        const data = doc.data();
+        if (data.scores) {
+          const avgSessionScore = (data.scores.correctness + data.scores.efficiency + data.scores.communication) / 3;
+          totalScore += avgSessionScore;
+          scoreCount++;
+        }
+      });
+      const averageScore = scoreCount > 0 ? parseFloat((totalScore / scoreCount).toFixed(1)) : 0;
+
+      return {
+        totalUsers,
+        totalSessionsCompleted,
+        totalAICallsToday,
+        averageScore
+      };
+    } catch (err) {
+      Sentry.captureException(err, { tags: { feature: 'admin-dashboard' } });
+      throw err;
+    }
+  } else {
+    const users = getLocalData('im_users', {});
+    const feedbacks = getLocalData('im_feedback', []);
+    const apiUsage = getLocalData('im_api_usage', {});
+
+    const totalUsers = Object.keys(users).length;
+    const totalSessionsCompleted = feedbacks.length;
+
+    let totalAICallsToday = 0;
+    Object.values(apiUsage).forEach((usage: any) => {
+      totalAICallsToday += usage.claudeCallsToday || 0;
+    });
+
+    let totalScore = 0;
+    let scoreCount = 0;
+    feedbacks.forEach((fb: any) => {
+      if (fb.scores) {
+        const avg = (fb.scores.correctness + fb.scores.efficiency + fb.scores.communication) / 3;
+        totalScore += avg;
+        scoreCount++;
+      }
+    });
+    const averageScore = scoreCount > 0 ? parseFloat((totalScore / scoreCount).toFixed(1)) : 0;
+
+    return {
+      totalUsers,
+      totalSessionsCompleted,
+      totalAICallsToday,
+      averageScore
+    };
+  }
+};
+
+export const getAdminFeedback = async (): Promise<any[]> => {
+  trackFirestoreRead('getAdminFeedback');
+  if (!MOCK_MODE) {
+    try {
+      const collRef = collection(firestoreDb, 'user_feedback');
+      const snap = await getDocs(query(collRef, orderBy('createdAt', 'desc')));
+      return snap.docs.map(d => {
+        const data = d.data();
+        return {
+          id: d.id,
+          ...data,
+          createdAt: data.createdAt ? (typeof data.createdAt.toDate === 'function' ? data.createdAt.toDate().toISOString() : new Date(data.createdAt).toISOString()) : new Date().toISOString()
+        };
+      });
+    } catch (err) {
+      Sentry.captureException(err, { tags: { feature: 'admin-dashboard' } });
+      throw err;
+    }
+  } else {
+    const list = getLocalData('im_user_feedback', []);
+    return [...list].sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+};
+
+export const getRecentSignups = async (): Promise<any[]> => {
+  trackFirestoreRead('getRecentSignups');
+  if (!MOCK_MODE) {
+    try {
+      const collRef = collection(firestoreDb, 'users');
+      const q = query(collRef, orderBy('createdAt', 'desc'), limit(10));
+      const snap = await getDocs(q);
+      return snap.docs.map(d => {
+        const data = d.data();
+        return {
+          uid: d.id,
+          ...data,
+          createdAt: data.createdAt ? (typeof data.createdAt.toDate === 'function' ? data.createdAt.toDate().toISOString() : new Date(data.createdAt).toISOString()) : new Date().toISOString()
+        };
+      });
+    } catch (err) {
+      Sentry.captureException(err, { tags: { feature: 'admin-dashboard' } });
+      throw err;
+    }
+  } else {
+    const users = getLocalData('im_users', {});
+    const list = Object.values(users);
+    return [...list]
+      .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 10);
   }
 };
 

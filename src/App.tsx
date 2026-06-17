@@ -11,6 +11,7 @@ import { Leaderboard } from './pages/Leaderboard';
 import { NotFound } from './pages/NotFound';
 import { SkillGapTracker } from './pages/SkillGapTracker';
 import { SoloInterview } from './pages/SoloInterview';
+import { AdminDashboard } from './pages/AdminDashboard';
 
 function App() {
   return (
@@ -100,6 +101,15 @@ function App() {
             } 
           />
 
+          {/* Admin Dashboard Route */}
+          <Route 
+            path="/admin" 
+            element={
+              <ProtectedRoute requireOnboarded={true} requireAdmin={true}>
+                <AdminDashboard />
+              </ProtectedRoute>
+            } 
+          />
 
           {/* Fallback Route */}
           <Route path="*" element={<NotFound />} />

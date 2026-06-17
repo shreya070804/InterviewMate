@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import * as Sentry from '@sentry/react';
 import { getFeedback, saveFeedback, getQuestions, checkApiUsage, incrementApiUsage, showToast } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import type { Feedback } from '../types';
@@ -236,6 +237,7 @@ export const FeedbackDetails: React.FC = () => {
           return;
         } catch (apiErr) {
           console.warn("Anthropic API failed or CORS blocked. Utilizing High-Fidelity Local AI Fallback Analyzer.", apiErr);
+          Sentry.captureException(apiErr, { tags: { feature: 'feedback-generation' } });
         }
       }
 
@@ -340,6 +342,7 @@ export const FeedbackDetails: React.FC = () => {
         }
       } catch (err) {
         console.warn("Claude summary API failed, using local fallback", err);
+        Sentry.captureException(err, { tags: { feature: 'feedback-generation' } });
       }
     }
 

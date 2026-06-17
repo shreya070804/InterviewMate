@@ -2,9 +2,16 @@ import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-export const ProtectedRoute: React.FC<{ children: React.ReactNode; requireOnboarded?: boolean }> = ({ 
+import { isAdmin } from '../firebase';
+
+export const ProtectedRoute: React.FC<{ 
+  children: React.ReactNode; 
+  requireOnboarded?: boolean; 
+  requireAdmin?: boolean;
+}> = ({ 
   children, 
-  requireOnboarded = true 
+  requireOnboarded = true,
+  requireAdmin = false
 }) => {
   const { user, profile, loading } = useAuth();
   const location = useLocation();
@@ -28,6 +35,11 @@ export const ProtectedRoute: React.FC<{ children: React.ReactNode; requireOnboar
   if (requireOnboarded && profile && !profile.onboarded) {
     // Redirect to onboarding if not done yet
     return <Navigate to="/onboarding" replace />;
+  }
+
+  if (requireAdmin && !isAdmin(user.email)) {
+    // Redirect non-admins to the dashboard
+    return <Navigate to="/" replace />;
   }
 
   return <>{children}</>;
