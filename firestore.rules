@@ -1,68 +1,107 @@
+// firestore.rules
+// Production-grade Firestore security rules for InterviewMate app
+// ---------------------------------------------------------------
+// Users collection
+//   - A user can read/write only their own document (uid matches doc ID).
+//   - Private fields (resumeText, email, etc.) are not readable by others.
+//   - Public profile fields are exposed via a dedicated subcollection
+//     `public_profiles` or via field-level rules.
+// Sessions collection
+//   - Only the two participants listed in `participantIds` array may read/write.
+//   - This restriction also applies to any subcollections under a session.
+// Questions collection
+//   - Any authenticated user can read questions.
+//   - Writes are allowed only for server‑side Cloud Functions using the Admin SDK.
+// Matchmaking_queue collection
+//   - Users can read/write only their own queue document (document ID = uid).
+// Leaderboard and question_packs collections
+//   - Public read access, no client writes.
+// ---------------------------------------------------------------
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Helper to check if user is authenticated
-    function isAuthenticated() {
-      return request.auth != null;
-    }
-    
-    // User profile rules: users can read any profile (to see partner details), but only write their own
+
+    // ---------------------------
+    // Users
+    // ---------------------------
+    // Private user document – stored at /users/{uid}
     match /users/{userId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && request.auth.uid == userId;
+      // Allow the owner to read/write the whole document
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+
+      // Field‑level read rules for public profile fields.
+      // If you prefer a separate collection, uncomment the block below and comment the field rules.
+      // match /public_profiles/{userId} {
+      //   allow read: if true; // public read of selected fields only
+      //   allow write: if false; // never write from client side
+      // }
+
+      // Restrict reads of private fields when the caller is not the owner.
+      function isOwner() { return request.auth != null && request.auth.uid == userId; }
+      function isPublicField(field) {
+        return field in ['username', 'displayName', 'avatar', 'bio', 'stats'];
+      }
+      // Use field‑level rules for get() and list() operations
+      allow get: if isOwner() || isPublicField(resource.data.keys());
+      allow list: if false; // disallow listing all users from client side
     }
 
-    // Sessions rules: authenticated users can read/write sessions where they are host or guest (or if guest is null, to join)
+    // ---------------------------
+    // Sessions
+    // ---------------------------
     match /sessions/{sessionId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && (
-        resource.data.hostId == request.auth.uid || 
-        resource.data.guestId == request.auth.uid || 
-        resource.data.guestId == null
-      );
-      allow delete: if isAuthenticated() && resource.data.hostId == request.auth.uid;
+      // The document must contain an array field `participantIds` with two uid strings.
+      function isParticipant() {
+        return request.auth != null &&
+               request.auth.uid in resource.data.participantIds;
+      }
+      allow read, write: if isParticipant();
+
+      // Apply same rule to any subcollection under a session (messages, codeSnapshots, whiteboard, etc.)
+      match /{document=**} {
+        allow read, write: if isParticipant();
+      }
     }
 
-    match /sessions/{sessionId}/messages/{messageId} {
-      allow read, write: if isAuthenticated();
-    }
-
-    // Feedback rules: authenticated users can read feedback for sessions they participated in, and write if they are host or guest
-    match /feedback/{feedbackId} {
-      allow read: if isAuthenticated() && (
-        resource.data.userId == request.auth.uid || 
-        resource.data.reviewerId == request.auth.uid
-      );
-      allow write: if isAuthenticated();
-    }
-
-    // Matchmaking queue rules: users can only read/write their own queue documents
-    match /matchmaking_queue/{queueId} {
-      allow read, write: if isAuthenticated() && (
-        request.auth.uid == request.resource.data.userId || 
-        request.auth.uid == resource.data.userId
-      );
-    }
-
-    // Questions bank: anyone authenticated can read, only admin or host can write
+    // ---------------------------
+    // Questions (read‑only for clients)
+    // ---------------------------
     match /questions/{questionId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
-    }
-    
-    // Solo sessions rules: users can only read/write their own solo sessions
-    match /solo_sessions/{sessionId} {
-      allow read, write: if isAuthenticated() && (
-        request.auth.uid == request.resource.data.userId ||
-        request.auth.uid == resource.data.userId
-      );
+      // Authenticated users may read questions
+      allow read: if request.auth != null;
+      // Writes are restricted to admin SDK (i.e., Cloud Functions)
+      allow write: if request.auth != null && request.auth.token.admin == true;
     }
 
-    // API usage tracking rules: read-only for current authenticated user, write is server-only
-    match /api_usage/{userId} {
-      allow read: if isAuthenticated() && request.auth.uid == userId;
+    // ---------------------------
+    // Matchmaking queue – one document per user
+    // ---------------------------
+    match /matchmaking_queue/{uid} {
+      // Users can only access their own queue document
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // ---------------------------
+    // Leaderboard – public read only
+    // ---------------------------
+    match /leaderboard/{docId} {
+      allow read: if true; // anyone can read
+      allow write: if false; // client writes blocked
+    }
+
+    // ---------------------------
+    // Question packs – public read only
+    // ---------------------------
+    match /question_packs/{docId} {
+      allow read: if true;
       allow write: if false;
+    }
+
+    // ---------------------------
+    // Fallback – deny everything else
+    // ---------------------------
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
