@@ -227,9 +227,14 @@ export const AdminDashboard: React.FC = () => {
                             <td className="whitespace-nowrap px-4 py-3.5">
                               <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
                                 fb.type === 'bug' 
-                                  ? 'bg-red-100 dark:bg-red-950 text-red-800 dark:text-red-300' 
-                                  : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300'
+                                  ? 'bg-red-100 dark:bg-red-950/60 text-red-800 dark:text-red-300 border border-red-200 dark:border-red-900/50' 
+                                  : 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900/50'
                               }`}>
+                                {fb.type === 'bug' ? (
+                                  <AlertCircle className="h-3 w-3 mr-1 shrink-0" aria-hidden="true" />
+                                ) : (
+                                  <Sparkles className="h-3 w-3 mr-1 shrink-0" aria-hidden="true" />
+                                )}
                                 {fb.type}
                               </span>
                             </td>

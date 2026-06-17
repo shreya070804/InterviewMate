@@ -1078,9 +1078,10 @@ export const Dashboard: React.FC = () => {
                   setModalDuration(45);
                   setGeneratedSessionId('');
                 }}
-                className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-all focus:outline-none"
+                aria-label="Close scheduling modal"
+                className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-all focus-visible:ring-2 focus-visible:ring-brand focus:outline-none"
               >
-                <Plus className="h-5 w-5 rotate-45" />
+                <Plus className="h-5 w-5 rotate-45" aria-hidden="true" />
               </button>
             </div>
 
@@ -1090,12 +1091,31 @@ export const Dashboard: React.FC = () => {
               <div className="space-y-2">
                 <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Interview Topic</label>
                 <div className="flex flex-wrap gap-2">
-                  {(['DSA', 'System Design', 'Frontend', 'HR'] as const).map((t) => (
+                  {(['DSA', 'System Design', 'Frontend', 'HR'] as const).map((t, idx, arr) => (
                     <button
                       key={t}
                       type="button"
                       onClick={() => setModalTopic(t)}
-                      className={`rounded-full px-4 py-1.5 text-xs font-bold border transition-all cursor-pointer ${
+                      onKeyDown={(e) => {
+                        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+                          e.preventDefault();
+                          const nextIdx = (idx + 1) % arr.length;
+                          setModalTopic(arr[nextIdx]);
+                          const buttons = e.currentTarget.parentElement?.querySelectorAll('button');
+                          if (buttons && buttons[nextIdx]) {
+                            (buttons[nextIdx] as HTMLButtonElement).focus();
+                          }
+                        } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                          e.preventDefault();
+                          const prevIdx = (idx - 1 + arr.length) % arr.length;
+                          setModalTopic(arr[prevIdx]);
+                          const buttons = e.currentTarget.parentElement?.querySelectorAll('button');
+                          if (buttons && buttons[prevIdx]) {
+                            (buttons[prevIdx] as HTMLButtonElement).focus();
+                          }
+                        }
+                      }}
+                      className={`rounded-full px-4 py-1.5 text-xs font-bold border transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-brand focus:outline-none ${
                         modalTopic === t
                           ? 'bg-brand border-brand text-white shadow-sm'
                           : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
@@ -1117,7 +1137,7 @@ export const Dashboard: React.FC = () => {
                     required
                     value={modalDate}
                     onChange={(e) => setModalDate(e.target.value)}
-                    className="block w-full rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs text-slate-800 focus:border-brand focus:bg-white focus:outline-none"
+                    className="block w-full rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs text-slate-800 focus:border-brand focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                   />
                 </div>
                 <div className="space-y-1">
@@ -1128,7 +1148,7 @@ export const Dashboard: React.FC = () => {
                     required
                     value={modalTime}
                     onChange={(e) => setModalTime(e.target.value)}
-                    className="block w-full rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs text-slate-800 focus:border-brand focus:bg-white focus:outline-none"
+                    className="block w-full rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs text-slate-800 focus:border-brand focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                   />
                 </div>
               </div>
@@ -1137,12 +1157,31 @@ export const Dashboard: React.FC = () => {
               <div className="space-y-2">
                 <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Duration</label>
                 <div className="grid grid-cols-3 gap-2">
-                  {([30, 45, 60] as const).map((d) => (
+                  {([30, 45, 60] as const).map((d, idx, arr) => (
                     <button
                       key={d}
                       type="button"
                       onClick={() => setModalDuration(d)}
-                      className={`rounded-lg py-2 text-xs font-bold border transition-all cursor-pointer ${
+                      onKeyDown={(e) => {
+                        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+                          e.preventDefault();
+                          const nextIdx = (idx + 1) % arr.length;
+                          setModalDuration(arr[nextIdx]);
+                          const buttons = e.currentTarget.parentElement?.querySelectorAll('button');
+                          if (buttons && buttons[nextIdx]) {
+                            (buttons[nextIdx] as HTMLButtonElement).focus();
+                          }
+                        } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                          e.preventDefault();
+                          const prevIdx = (idx - 1 + arr.length) % arr.length;
+                          setModalDuration(arr[prevIdx]);
+                          const buttons = e.currentTarget.parentElement?.querySelectorAll('button');
+                          if (buttons && buttons[prevIdx]) {
+                            (buttons[prevIdx] as HTMLButtonElement).focus();
+                          }
+                        }
+                      }}
+                      className={`rounded-lg py-2 text-xs font-bold border transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-brand focus:outline-none ${
                         modalDuration === d
                           ? 'bg-brand border-brand text-white shadow-sm'
                           : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
@@ -1164,8 +1203,9 @@ export const Dashboard: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => handleCopyLink(`${window.location.origin}/room/${generatedSessionId}`, 'generated')}
-                    className="p-1 hover:text-brand transition-colors text-slate-400"
+                    className="p-1 hover:text-brand transition-colors text-slate-400 focus-visible:ring-2 focus-visible:ring-brand focus:outline-none rounded"
                     title="Copy invite code"
+                    aria-label="Copy invite code"
                   >
                     {copiedSessionId === 'generated' ? (
                       <Check className="h-4 w-4 text-green-600" />
@@ -1214,9 +1254,10 @@ export const Dashboard: React.FC = () => {
               <h3 className="text-lg font-bold text-slate-800">Find a partner now</h3>
               <button 
                 onClick={() => setIsMatchmakerOpen(false)}
-                className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-all focus:outline-none"
+                aria-label="Close matchmaking modal"
+                className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-all focus-visible:ring-2 focus-visible:ring-brand focus:outline-none"
               >
-                <Plus className="h-5 w-5 rotate-45" />
+                <Plus className="h-5 w-5 rotate-45" aria-hidden="true" />
               </button>
             </div>
 
@@ -1224,12 +1265,31 @@ export const Dashboard: React.FC = () => {
               <div className="space-y-2">
                 <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Choose Topic</label>
                 <div className="grid grid-cols-2 gap-2">
-                  {(['DSA', 'System Design', 'Frontend', 'HR'] as const).map((t) => (
+                  {(['DSA', 'System Design', 'Frontend', 'HR'] as const).map((t, idx, arr) => (
                     <button
                       key={t}
                       type="button"
                       onClick={() => setMatchTopic(t)}
-                      className={`rounded-lg py-2.5 text-xs font-bold border transition-all cursor-pointer ${
+                      onKeyDown={(e) => {
+                        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+                          e.preventDefault();
+                          const nextIdx = (idx + 1) % arr.length;
+                          setMatchTopic(arr[nextIdx]);
+                          const buttons = e.currentTarget.parentElement?.querySelectorAll('button');
+                          if (buttons && buttons[nextIdx]) {
+                            (buttons[nextIdx] as HTMLButtonElement).focus();
+                          }
+                        } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                          e.preventDefault();
+                          const prevIdx = (idx - 1 + arr.length) % arr.length;
+                          setMatchTopic(arr[prevIdx]);
+                          const buttons = e.currentTarget.parentElement?.querySelectorAll('button');
+                          if (buttons && buttons[prevIdx]) {
+                            (buttons[prevIdx] as HTMLButtonElement).focus();
+                          }
+                        }
+                      }}
+                      className={`rounded-lg py-2.5 text-xs font-bold border transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-brand focus:outline-none ${
                         matchTopic === t
                           ? 'bg-brand border-brand text-white shadow-sm'
                           : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'

@@ -562,15 +562,34 @@ export const SoloInterview: React.FC = () => {
               <div className="space-y-2">
                 <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Interview Topic</label>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  {(['DSA', 'System Design', 'Frontend', 'HR'] as const).map((t) => (
+                  {(['DSA', 'System Design', 'Frontend', 'HR'] as const).map((t, idx, arr) => (
                     <button
                       key={t}
                       type="button"
                       onClick={() => setTopic(t)}
-                      className={`rounded-xl py-3 text-xs font-bold border transition-all cursor-pointer ${
+                      onKeyDown={(e) => {
+                        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+                          e.preventDefault();
+                          const nextIdx = (idx + 1) % arr.length;
+                          setTopic(arr[nextIdx]);
+                          const buttons = e.currentTarget.parentElement?.querySelectorAll('button');
+                          if (buttons && buttons[nextIdx]) {
+                            (buttons[nextIdx] as HTMLButtonElement).focus();
+                          }
+                        } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                          e.preventDefault();
+                          const prevIdx = (idx - 1 + arr.length) % arr.length;
+                          setTopic(arr[prevIdx]);
+                          const buttons = e.currentTarget.parentElement?.querySelectorAll('button');
+                          if (buttons && buttons[prevIdx]) {
+                            (buttons[prevIdx] as HTMLButtonElement).focus();
+                          }
+                        }
+                      }}
+                      className={`rounded-xl py-3 text-xs font-bold border transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-brand focus:outline-none ${
                         topic === t
                           ? 'bg-brand border-brand text-white shadow-sm'
-                          : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                          : 'bg-slate-50 border-slate-200 text-slate-650 hover:bg-slate-100'
                       }`}
                     >
                       {t}
@@ -583,15 +602,34 @@ export const SoloInterview: React.FC = () => {
               <div className="space-y-2">
                 <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Difficulty Level</label>
                 <div className="grid grid-cols-3 gap-3">
-                  {(['Easy', 'Medium', 'Hard'] as const).map((d) => (
+                  {(['Easy', 'Medium', 'Hard'] as const).map((d, idx, arr) => (
                     <button
                       key={d}
                       type="button"
                       onClick={() => setDifficulty(d)}
-                      className={`rounded-xl py-3 text-xs font-bold border transition-all cursor-pointer ${
+                      onKeyDown={(e) => {
+                        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+                          e.preventDefault();
+                          const nextIdx = (idx + 1) % arr.length;
+                          setDifficulty(arr[nextIdx]);
+                          const buttons = e.currentTarget.parentElement?.querySelectorAll('button');
+                          if (buttons && buttons[nextIdx]) {
+                            (buttons[nextIdx] as HTMLButtonElement).focus();
+                          }
+                        } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                          e.preventDefault();
+                          const prevIdx = (idx - 1 + arr.length) % arr.length;
+                          setDifficulty(arr[prevIdx]);
+                          const buttons = e.currentTarget.parentElement?.querySelectorAll('button');
+                          if (buttons && buttons[prevIdx]) {
+                            (buttons[prevIdx] as HTMLButtonElement).focus();
+                          }
+                        }
+                      }}
+                      className={`rounded-xl py-3 text-xs font-bold border transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-brand focus:outline-none ${
                         difficulty === d
                           ? 'bg-brand border-brand text-white shadow-sm'
-                          : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                          : 'bg-slate-50 border-slate-200 text-slate-650 hover:bg-slate-100'
                       }`}
                     >
                       {d}
@@ -603,13 +641,13 @@ export const SoloInterview: React.FC = () => {
               <div className="pt-4 border-t border-slate-100 flex gap-4">
                 <button
                   onClick={() => navigate('/')}
-                  className="flex-1 rounded-xl border border-slate-200 py-3 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer text-center"
+                  className="flex-1 rounded-xl border border-slate-200 py-3 text-xs font-semibold text-slate-650 hover:bg-slate-50 cursor-pointer text-center focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus:outline-none"
                 >
                   Back to Dashboard
                 </button>
                 <button
                   onClick={handleStartSession}
-                  className="flex-1 rounded-xl bg-slate-900 hover:bg-slate-800 text-white py-3 text-xs font-bold shadow-md transition-all cursor-pointer text-center"
+                  className="flex-1 rounded-xl bg-slate-900 hover:bg-slate-800 text-white py-3 text-xs font-bold shadow-md transition-all cursor-pointer text-center focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus:outline-none"
                 >
                   Start Session
                 </button>

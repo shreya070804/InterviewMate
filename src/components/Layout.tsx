@@ -78,13 +78,21 @@ export const Layout: React.FC<LayoutProps> = ({ children, showNavbar = true }) =
 
   return (
     <div className="min-h-screen flex flex-col bg-[#fcfcfc] dark:bg-slate-950 dark:text-slate-100 relative">
+      <a 
+        href="#main-content" 
+        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:rounded-lg focus:bg-brand focus:text-white focus:px-4 focus:py-2 focus:text-xs focus:font-bold focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2"
+      >
+        Skip to content
+      </a>
       {showNavbar && <Navbar />}
       <motion.main
+        id="main-content"
+        tabIndex={-1}
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -15 }}
         transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-        className="grow flex flex-col"
+        className="grow flex flex-col focus:outline-none"
       >
         {children}
       </motion.main>
@@ -93,9 +101,10 @@ export const Layout: React.FC<LayoutProps> = ({ children, showNavbar = true }) =
       <div className="fixed bottom-6 right-6 z-999">
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="flex items-center gap-1.5 rounded-full bg-slate-905 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-950 px-4 py-2.5 text-xs font-bold shadow-lg transition-all cursor-pointer hover:scale-105 border border-slate-750 dark:border-slate-350"
+          aria-label="Open feedback form"
+          className="flex items-center gap-1.5 rounded-full bg-slate-905 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-950 px-4 py-2.5 text-xs font-bold shadow-lg transition-all cursor-pointer hover:scale-105 border border-slate-750 dark:border-slate-350 focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus:outline-none"
         >
-          <MessageSquare className="h-4 w-4 text-brand dark:text-brand" />
+          <MessageSquare className="h-4 w-4 text-brand dark:text-brand" aria-hidden="true" />
           <span>Feedback</span>
         </button>
 
@@ -116,9 +125,10 @@ export const Layout: React.FC<LayoutProps> = ({ children, showNavbar = true }) =
                 </span>
                 <button
                   onClick={() => setIsOpen(false)}
-                  className="text-slate-400 hover:text-slate-650 dark:hover:text-slate-200 transition-colors cursor-pointer"
+                  aria-label="Close feedback panel"
+                  className="text-slate-400 hover:text-slate-650 dark:hover:text-slate-200 transition-colors cursor-pointer rounded-lg focus-visible:ring-2 focus-visible:ring-brand focus:outline-none"
                 >
-                  <X className="h-4.5 w-4.5" />
+                  <X className="h-4.5 w-4.5" aria-hidden="true" />
                 </button>
               </div>
 
@@ -127,25 +137,25 @@ export const Layout: React.FC<LayoutProps> = ({ children, showNavbar = true }) =
                 <button
                   type="button"
                   onClick={() => setActiveTab('bug')}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-brand focus:outline-none ${
                     activeTab === 'bug'
                       ? 'bg-white dark:bg-slate-800 text-red-500 dark:text-red-400 shadow-xs'
                       : 'text-slate-500 dark:text-slate-400 hover:text-slate-750 dark:hover:text-slate-200'
                   }`}
                 >
-                  <Bug className="h-3.5 w-3.5" />
+                  <Bug className="h-3.5 w-3.5" aria-hidden="true" />
                   <span>Report a Bug</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setActiveTab('feature')}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-brand focus:outline-none ${
                     activeTab === 'feature'
                       ? 'bg-white dark:bg-slate-800 text-brand shadow-xs'
                       : 'text-slate-500 dark:text-slate-400 hover:text-slate-750 dark:hover:text-slate-200'
                   }`}
                 >
-                  <Lightbulb className="h-3.5 w-3.5" />
+                  <Lightbulb className="h-3.5 w-3.5" aria-hidden="true" />
                   <span>Suggest Feature</span>
                 </button>
               </div>
@@ -170,9 +180,9 @@ export const Layout: React.FC<LayoutProps> = ({ children, showNavbar = true }) =
                 <button
                   type="submit"
                   disabled={!message.trim() || isSubmitting}
-                  className="w-full flex items-center justify-center gap-1.5 rounded-xl bg-brand hover:bg-brand-hover text-white py-2.5 text-xs font-bold shadow-sm transition-all disabled:opacity-40 cursor-pointer"
+                  className="w-full flex items-center justify-center gap-1.5 rounded-xl bg-brand hover:bg-brand-hover text-white py-2.5 text-xs font-bold shadow-sm transition-all disabled:opacity-40 cursor-pointer focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus:outline-none"
                 >
-                  <Send className="h-3.5 w-3.5" />
+                  <Send className="h-3.5 w-3.5" aria-hidden="true" />
                   <span>{isSubmitting ? 'Submitting...' : 'Submit Feedback'}</span>
                 </button>
               </form>

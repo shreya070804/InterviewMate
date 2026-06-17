@@ -128,37 +128,45 @@ export const Navbar: React.FC = () => {
               {/* Theme Toggle */}
               <button 
                 onClick={toggleTheme} 
-                className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                aria-label="Toggle dark and light visual theme"
+                className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-600 dark:hover:text-slate-300 transition-colors focus-visible:ring-2 focus-visible:ring-brand focus:outline-none"
                 title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
               >
-                {isDarkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+                {isDarkMode ? <Sun className="h-5 w-5" aria-hidden="true" /> : <Moon className="h-5 w-5" aria-hidden="true" />}
               </button>
 
               {/* Notification Bell */}
-              <button className="relative rounded-full p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
+              <button 
+                aria-label="View notifications"
+                className="relative rounded-full p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-600 dark:hover:text-slate-300 transition-colors focus-visible:ring-2 focus-visible:ring-brand focus:outline-none"
+              >
                 <span className="sr-only">Notifications</span>
-                <Bell className="h-5 w-5" />
+                <Bell className="h-5 w-5" aria-hidden="true" />
                 <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-teal-600"></span>
               </button>
 
               {/* Settings Toggle */}
               <button 
                 onClick={() => navigate('/onboarding')} 
-                className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                aria-label="Profile settings"
+                className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-600 dark:hover:text-slate-300 transition-colors focus-visible:ring-2 focus-visible:ring-brand focus:outline-none"
                 title="Profile Settings"
               >
-                <Settings className="h-5 w-5" />
+                <Settings className="h-5 w-5" aria-hidden="true" />
               </button>
 
               {/* Profile Dropdown */}
               <div className="relative">
                 <button
                   onClick={() => setDropdownOpen(!dropdownOpen)}
+                  aria-label="User profile menu"
+                  aria-expanded={dropdownOpen}
+                  aria-haspopup="true"
                   className="flex items-center gap-2 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-1 pr-3 hover:bg-slate-100 dark:hover:bg-slate-750 transition-all focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2"
                 >
                   <img
                     src={profile?.photoURL || user.photoURL}
-                    alt={profile?.displayName || user.displayName}
+                    alt={`${profile?.displayName || user.displayName || 'User'}'s profile avatar`}
                     className="h-7 w-7 rounded-full object-cover"
                   />
                   <span className="text-sm font-medium text-slate-700 max-w-[120px] truncate">
@@ -202,9 +210,11 @@ export const Navbar: React.FC = () => {
           <div className="flex md:hidden items-center">
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="inline-flex items-center justify-center rounded-md p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-500 focus:outline-none"
+              aria-label="Toggle main menu"
+              aria-expanded={mobileMenuOpen}
+              className="inline-flex items-center justify-center rounded-md p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-505 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
             >
-              {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+              {mobileMenuOpen ? <X className="h-6 w-6" aria-hidden="true" /> : <Menu className="h-6 w-6" aria-hidden="true" />}
             </button>
           </div>
         </div>
@@ -253,7 +263,7 @@ export const Navbar: React.FC = () => {
             <div className="flex items-center gap-3 px-3 py-2">
               <img
                 src={profile?.photoURL || user.photoURL}
-                alt={profile?.displayName || user.displayName}
+                alt={`${profile?.displayName || user.displayName || 'User'}'s profile avatar`}
                 className="h-10 w-10 rounded-full object-cover"
               />
               <div>

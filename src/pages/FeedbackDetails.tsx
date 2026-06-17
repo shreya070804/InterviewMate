@@ -505,9 +505,10 @@ export const FeedbackDetails: React.FC = () => {
               <div className="flex items-center gap-3 shrink-0" id="feedback-header-actions">
                 <button
                   onClick={handleDownloadPDF}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 text-xs font-bold shadow-sm transition-all cursor-pointer"
+                  aria-label="Download feedback report as PDF"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 text-xs font-bold shadow-sm transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus:outline-none"
                 >
-                  <Download className="h-3.5 w-3.5" /> Download as PDF
+                  <Download className="h-3.5 w-3.5" aria-hidden="true" /> Download as PDF
                 </button>
                 
                 <div className="relative shrink-0">
@@ -523,10 +524,11 @@ export const FeedbackDetails: React.FC = () => {
                       <label className="text-[10px] font-bold uppercase text-slate-500 block">Claude API Key</label>
                       <input
                         type="password"
+                        aria-label="Claude API Key"
                         placeholder="sk-ant-..."
                         value={apiKeyInput}
                         onChange={(e) => setApiKeyInput(e.target.value)}
-                        className="block w-full rounded border border-slate-200 p-1.5 text-xs focus:outline-none text-slate-800"
+                        className="block w-full rounded border border-slate-200 p-1.5 text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-brand text-slate-800"
                       />
                       <div className="flex justify-end gap-2">
                         <button
@@ -630,6 +632,11 @@ export const FeedbackDetails: React.FC = () => {
                       </div>
                       <div className="h-3 w-full bg-slate-200 rounded-full overflow-hidden">
                         <div 
+                          role="progressbar"
+                          aria-valuenow={feedback.sessionSummary.estimated_readiness}
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-label="Estimated Readiness"
                           className={`h-full rounded-full transition-all duration-1000 ${
                             feedback.sessionSummary.estimated_readiness < 40 ? 'bg-red-500' :
                             feedback.sessionSummary.estimated_readiness <= 70 ? 'bg-amber-500' : 'bg-emerald-500'

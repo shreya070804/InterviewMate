@@ -1170,8 +1170,14 @@ export const InterviewRoom: React.FC = () => {
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-[#0f172a] text-slate-100 font-sans">
+      <a 
+        href="#main-content" 
+        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:rounded-lg focus:bg-brand focus:text-white focus:px-4 focus:py-2 focus:text-xs focus:font-bold focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2"
+      >
+        Skip to main content
+      </a>
       {/* HEADER SECTION */}
-      <header className="flex h-14 shrink-0 items-center justify-between border-b border-slate-800 bg-[#1e293b]/70 px-4">
+      <header role="banner" className="flex h-14 shrink-0 items-center justify-between border-b border-slate-800 bg-[#1e293b]/70 px-4">
         <div className="flex items-center gap-4">
           <span className="text-base font-bold text-brand cursor-pointer" onClick={() => navigate('/')}>
             InterviewMate
@@ -1183,30 +1189,30 @@ export const InterviewRoom: React.FC = () => {
         </div>
 
         {/* Code/Whiteboard Toggle */}
-        <div className="flex items-center bg-[#0f172a] rounded-lg p-1 border border-slate-800">
+        <nav aria-label="Room workspace modes" className="flex items-center bg-[#0f172a] rounded-lg p-1 border border-slate-800">
           <button
             onClick={() => {
               setActiveMode('code');
               if (sessionId) updateSession(sessionId, { activeMode: 'code' });
             }}
-            className={`flex items-center gap-1 px-3 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer ${
+            className={`flex items-center gap-1 px-3 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-brand focus:outline-none ${
               activeMode === 'code' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            <Code className="h-3.5 w-3.5" /> Code
+            <Code className="h-3.5 w-3.5" aria-hidden="true" /> Code
           </button>
           <button
             onClick={() => {
               setActiveMode('whiteboard');
               if (sessionId) updateSession(sessionId, { activeMode: 'whiteboard' });
             }}
-            className={`flex items-center gap-1 px-3 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer ${
+            className={`flex items-center gap-1 px-3 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-brand focus:outline-none ${
               activeMode === 'whiteboard' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            <Monitor className="h-3.5 w-3.5" /> Whiteboard
+            <Monitor className="h-3.5 w-3.5" aria-hidden="true" /> Whiteboard
           </button>
-        </div>
+        </nav>
 
         {/* Timer & Question buttons */}
         <div className="flex items-center gap-4">
@@ -1251,20 +1257,21 @@ export const InterviewRoom: React.FC = () => {
       </header>
 
       {/* CORE WORKSPACE GRID */}
-      <div className="flex flex-1 overflow-hidden relative">
+      <main id="main-content" tabIndex={-1} className="flex flex-1 overflow-hidden relative focus:outline-none">
         {/* Chat Sidebar slide-in panel */}
         {isChatOpen && (
-          <div className="absolute right-0 top-0 bottom-0 z-30 w-80 border-l border-slate-800 bg-[#0f172a] flex flex-col shadow-2xl transition-all duration-350 ease-in-out">
+          <aside role="complementary" aria-label="Room Chat" className="absolute right-0 top-0 bottom-0 z-30 w-80 border-l border-slate-800 bg-[#0f172a] flex flex-col shadow-2xl transition-all duration-350 ease-in-out">
             {/* Chat Header */}
             <div className="flex h-12 shrink-0 items-center justify-between border-b border-slate-800 px-4 bg-[#1e293b]/50">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-350 flex items-center gap-1.5">
-                <MessageSquare className="h-4 w-4 text-brand" /> Room Chat
+                <MessageSquare className="h-4 w-4 text-brand" aria-hidden="true" /> Room Chat
               </span>
               <button
                 onClick={() => setIsChatOpen(false)}
-                className="rounded-full p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-all cursor-pointer"
+                aria-label="Close chat panel"
+                className="rounded-full p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-brand focus:outline-none"
               >
-                <X className="h-4 w-4" />
+                <X className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
 
@@ -1321,7 +1328,7 @@ export const InterviewRoom: React.FC = () => {
                 Send
               </button>
             </form>
-          </div>
+          </aside>
         )}
 
         {/* LEFT VIDEO PANEL (60%) */}
@@ -1414,13 +1421,22 @@ export const InterviewRoom: React.FC = () => {
             <div className="bg-[#1e293b]/40 border-b border-slate-800 p-4 max-h-[220px] overflow-y-auto">
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-xs font-bold text-slate-200 flex items-center gap-1">
-                  <Code className="h-4 w-4 text-brand" /> {activeQuestion.title}
+                  <Code className="h-4 w-4 text-brand" aria-hidden="true" /> {activeQuestion.title}
                 </h3>
-                <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
+                <span className={`inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
                   activeQuestion.difficulty === 'Easy' ? 'bg-green-950/50 text-green-400' :
                   activeQuestion.difficulty === 'Medium' ? 'bg-amber-950/50 text-amber-400' : 'bg-red-950/50 text-red-400'
                 }`}>
-                  {activeQuestion.difficulty}
+                  {activeQuestion.difficulty === 'Easy' && <span className="h-1.5 w-1.5 rounded-full bg-green-400 shrink-0" aria-hidden="true"></span>}
+                  {activeQuestion.difficulty === 'Medium' && (
+                    <span 
+                      className="h-1.5 w-1.5 bg-amber-400 shrink-0" 
+                      style={{ clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)' }}
+                      aria-hidden="true"
+                    ></span>
+                  )}
+                  {activeQuestion.difficulty === 'Hard' && <span className="h-1.5 w-1.5 bg-red-400 shrink-0" aria-hidden="true"></span>}
+                  <span>{activeQuestion.difficulty}</span>
                 </span>
               </div>
               <p className="text-xs text-slate-400 leading-relaxed font-mono whitespace-pre-wrap">
@@ -1749,16 +1765,16 @@ export const InterviewRoom: React.FC = () => {
               </>
             )
           ) : (
-            <div className="flex-1 relative overflow-hidden bg-slate-900 border-t border-slate-800">
+            <aside role="complementary" aria-label="Whiteboard Canvas" className="flex-1 relative overflow-hidden bg-slate-900 border-t border-slate-800">
               <Excalidraw
                 excalidrawAPI={(api) => { excalidrawRef.current = api; }}
                 onChange={handleWhiteboardChange}
                 theme="dark"
               />
-            </div>
+            </aside>
           )}
         </div>
-      </div>
+      </main>
 
       {/* FOOTER */}
       <footer className="flex h-8 shrink-0 items-center justify-between border-t border-slate-800 bg-[#0e1626] px-4 text-[10px] text-slate-500">
@@ -1899,12 +1915,31 @@ export const InterviewRoom: React.FC = () => {
                   <div className="space-y-2">
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Difficulty</label>
                     <div className="flex gap-2">
-                      {(['Easy', 'Medium', 'Hard'] as const).map(diff => (
+                      {(['Easy', 'Medium', 'Hard'] as const).map((diff, idx, arr) => (
                         <button
                           key={diff}
                           type="button"
                           onClick={() => setGenDifficulty(diff)}
-                          className={`flex-1 rounded-lg py-1.5 text-xs font-semibold border transition-all cursor-pointer ${
+                          onKeyDown={(e) => {
+                            if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+                              e.preventDefault();
+                              const nextIdx = (idx + 1) % arr.length;
+                              setGenDifficulty(arr[nextIdx]);
+                              const buttons = e.currentTarget.parentElement?.querySelectorAll('button');
+                              if (buttons && buttons[nextIdx]) {
+                                (buttons[nextIdx] as HTMLButtonElement).focus();
+                              }
+                            } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                              e.preventDefault();
+                              const prevIdx = (idx - 1 + arr.length) % arr.length;
+                              setGenDifficulty(arr[prevIdx]);
+                              const buttons = e.currentTarget.parentElement?.querySelectorAll('button');
+                              if (buttons && buttons[prevIdx]) {
+                                (buttons[prevIdx] as HTMLButtonElement).focus();
+                              }
+                            }
+                          }}
+                          className={`flex-1 rounded-lg py-1.5 text-xs font-semibold border transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-brand focus:outline-none ${
                             genDifficulty === diff
                               ? 'bg-brand/10 border-brand text-brand'
                               : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
@@ -2136,7 +2171,7 @@ export const InterviewRoom: React.FC = () => {
                                     style={{ clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)' }}
                                   ></span>
                                 )}
-                                {q.difficulty === 'Hard' && <span className="h-1.5 w-1.5 rounded-full bg-rose-600 shrink-0"></span>}
+                                {q.difficulty === 'Hard' && <span className="h-1.5 w-1.5 bg-rose-600 shrink-0" title="Hard (Square indicator)"></span>}
                                 <span className={`${
                                   q.difficulty === 'Easy' ? 'text-emerald-400' :
                                   q.difficulty === 'Medium' ? 'text-amber-400' : 'text-rose-500'
