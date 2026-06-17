@@ -103,6 +103,7 @@ if (isFirebaseConfigured) {
   console.warn("Firebase credentials missing. InterviewMate is running in Mock Mode (using LocalStorage & Memory).");
 }
 
+export { firebaseFunctions };
 export const MOCK_MODE = !firebaseAuth || !firestoreDb;
 
 // PRE-SEEDED QUESTIONS
