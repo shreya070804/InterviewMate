@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useTranslation } from 'react-i18next';
 import * as Sentry from '@sentry/react';
 import { 
   subscribeToSession, 
@@ -90,6 +91,7 @@ PROJECTS:
 `;
 
 export const InterviewRoom: React.FC = () => {
+  const { t } = useTranslation();
   const { sessionId } = useParams<{ sessionId: string }>();
   const { user, profile } = useAuth();
   const navigate = useNavigate();
@@ -921,7 +923,7 @@ export const InterviewRoom: React.FC = () => {
   };
 
   const renderHighlightedTranscript = (text: string) => {
-    if (!text) return <span className="text-slate-500 font-sans">No transcript recorded yet. Speak your answer or let the mock run.</span>;
+    if (!text) return <span className="text-slate-500 font-sans">{t('room.no_transcript')}</span>;
 
     const fillerWords = ['um', 'uh', 'like', 'you know'];
     const regex = /\b(um|uh|like|you\s+know)\b/gi;
@@ -1184,7 +1186,7 @@ export const InterviewRoom: React.FC = () => {
           </span>
           <span className="h-4 w-px bg-slate-800"></span>
           <h2 className="text-xs font-semibold text-slate-300">
-            {session?.topicDetail || 'Mock Interview'} — {session?.duration || 45} min
+            {session?.topicDetail || 'Mock Interview'} — {session?.duration || 45} {t('scheduling_form.min_label', { count: session?.duration || 45 })}
           </h2>
         </div>
 
@@ -1199,7 +1201,7 @@ export const InterviewRoom: React.FC = () => {
               activeMode === 'code' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            <Code className="h-3.5 w-3.5" aria-hidden="true" /> Code
+            <Code className="h-3.5 w-3.5" aria-hidden="true" /> {t('room.code')}
           </button>
           <button
             onClick={() => {
@@ -1210,7 +1212,7 @@ export const InterviewRoom: React.FC = () => {
               activeMode === 'whiteboard' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            <Monitor className="h-3.5 w-3.5" aria-hidden="true" /> Whiteboard
+            <Monitor className="h-3.5 w-3.5" aria-hidden="true" /> {t('room.whiteboard')}
           </button>
         </nav>
 
@@ -1222,7 +1224,7 @@ export const InterviewRoom: React.FC = () => {
               onClick={() => setIsQuestionPickerOpen(true)}
               className="flex items-center gap-1 rounded bg-brand hover:bg-brand-hover px-3 py-1.5 text-xs font-bold transition-all cursor-pointer"
             >
-              <Brain className="h-4 w-4" /> Pick Question
+              <Brain className="h-4 w-4" /> {t('room.pick_question')}
             </button>
           )}
 
@@ -1230,7 +1232,7 @@ export const InterviewRoom: React.FC = () => {
           <button
             onClick={() => setIsChatOpen(!isChatOpen)}
             className="relative p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
-            title="Toggle Room Chat"
+            title={t('room.toggle_chat')}
           >
             <MessageSquare className="h-5 w-5" />
             {unreadCount > 0 && (
@@ -1251,7 +1253,7 @@ export const InterviewRoom: React.FC = () => {
             onClick={handleEndInterview}
             className="flex items-center gap-1.5 rounded bg-red-600 hover:bg-red-700 px-3.5 py-1.5 text-xs font-bold text-white transition-all cursor-pointer"
           >
-            <PhoneOff className="h-3.5 w-3.5" /> End interview
+            <PhoneOff className="h-3.5 w-3.5" /> {t('room.end_interview')}
           </button>
         </div>
       </header>
@@ -1264,11 +1266,11 @@ export const InterviewRoom: React.FC = () => {
             {/* Chat Header */}
             <div className="flex h-12 shrink-0 items-center justify-between border-b border-slate-800 px-4 bg-[#1e293b]/50">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-350 flex items-center gap-1.5">
-                <MessageSquare className="h-4 w-4 text-brand" aria-hidden="true" /> Room Chat
+                <MessageSquare className="h-4 w-4 text-brand" aria-hidden="true" /> {t('room.room_chat')}
               </span>
               <button
                 onClick={() => setIsChatOpen(false)}
-                aria-label="Close chat panel"
+                aria-label={t('room.toggle_chat')}
                 className="rounded-full p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-brand focus:outline-none"
               >
                 <X className="h-4 w-4" aria-hidden="true" />
@@ -1280,35 +1282,35 @@ export const InterviewRoom: React.FC = () => {
               {chatMessages.length === 0 ? (
                 <div className="flex-1 flex flex-col items-center justify-center text-slate-500 text-xs text-center p-4">
                   <MessageSquare className="h-8 w-8 text-slate-700 mb-2 opacity-50" />
-                  No messages yet. Type notes or hints here!
+                  {t('room.no_messages')}
                 </div>
               ) : (
                 chatMessages.map((msg) => {
                   const isMe = msg.senderId === user?.uid;
                   return (
-                    <div
-                      key={msg.id}
-                      className={`flex flex-col max-w-[85%] ${isMe ? 'self-end items-end' : 'self-start items-start'}`}
-                    >
-                      <span className="text-[10px] text-slate-500 font-semibold mb-0.5 px-1">
-                        {isMe ? 'You' : msg.senderName}
-                      </span>
-                      <div
-                        className={`rounded-2xl px-3.5 py-2 text-xs leading-relaxed wrap-break-word ${
-                          isMe
-                            ? 'bg-teal-700 text-white rounded-tr-none'
-                            : 'bg-slate-800 text-slate-200 rounded-tl-none'
-                        }`}
-                      >
-                        {msg.text}
-                      </div>
-                      <span className="text-[8px] text-slate-600 mt-0.5 px-1">
-                        {formatMsgTime(msg.timestamp)}
-                      </span>
-                    </div>
-                  );
-                })
-              )}
+                     <div
+                       key={msg.id}
+                       className={`flex flex-col max-w-[85%] ${isMe ? 'self-end items-end' : 'self-start items-start'}`}
+                     >
+                       <span className="text-[10px] text-slate-500 font-semibold mb-0.5 px-1">
+                         {isMe ? 'You' : msg.senderName}
+                       </span>
+                       <div
+                         className={`rounded-2xl px-3.5 py-2 text-xs leading-relaxed wrap-break-word ${
+                           isMe
+                             ? 'bg-teal-700 text-white rounded-tr-none'
+                             : 'bg-slate-800 text-slate-200 rounded-tl-none'
+                         }`}
+                       >
+                         {msg.text}
+                       </div>
+                       <span className="text-[8px] text-slate-600 mt-0.5 px-1">
+                         {formatMsgTime(msg.timestamp)}
+                       </span>
+                     </div>
+                   );
+                 })
+               )}
               <div ref={chatEndRef} />
             </div>
 
@@ -1318,14 +1320,14 @@ export const InterviewRoom: React.FC = () => {
                 type="text"
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
-                placeholder="Type a message..."
+                placeholder={t('room.type_message')}
                 className="flex-1 rounded-lg border border-slate-800 bg-[#0f172a] px-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:border-brand focus:outline-none"
               />
               <button
                 type="submit"
                 className="rounded-lg bg-brand hover:bg-brand-hover text-white px-3.5 py-1.5 text-xs font-bold transition-all cursor-pointer"
               >
-                Send
+                {t('room.send')}
               </button>
             </form>
           </aside>
@@ -1333,8 +1335,7 @@ export const InterviewRoom: React.FC = () => {
 
         {/* LEFT VIDEO PANEL (60%) */}
         <div className="flex w-[60%] flex-col bg-[#0b0f19] p-4 relative justify-between">
-          <div className="grid flex-1 grid-rows-2 gap-4">
-            {/* Tile 1: Peer / Interviewer */}
+          <div className="grid flex-1 grid-rows-2 gap-4"> {/* Tile 1: Peer / Interviewer */}
             <div className="relative rounded-2xl bg-slate-900/90 border border-slate-800 overflow-hidden flex items-center justify-center">
               {AGORA_APP_ID && remoteUsers.length > 0 ? (
                 // Real Agora Video Container
@@ -1347,7 +1348,7 @@ export const InterviewRoom: React.FC = () => {
                       {session?.hostId === user?.uid ? (session?.guestName?.[0] || 'G') : (session?.hostName?.[0] || 'H')}
                     </span>
                   </div>
-                  <p className="text-xs">Waiting for peer stream...</p>
+                  <p className="text-xs">{t('room.waiting_peer_stream')}</p>
                 </div>
               )}
               {/* Overlay Metadata */}
@@ -1374,13 +1375,13 @@ export const InterviewRoom: React.FC = () => {
                 />
               ) : (
                 // Fallback Avatar
-                <div className="flex flex-col items-center gap-3 text-slate-500">
+                <div className="flex flex-col items-center gap-3 text-slate-550">
                   <div className="h-16 w-16 rounded-full bg-slate-800 flex items-center justify-center border border-slate-700">
                     <span className="text-xl font-bold text-slate-300">
                       {profile?.displayName?.[0] || user?.displayName?.[0] || 'Y'}
                     </span>
                   </div>
-                  <p className="text-xs">Camera is off</p>
+                  <p className="text-xs">{t('room.camera_off')}</p>
                 </div>
               )}
               {/* Overlay Metadata */}
@@ -1408,7 +1409,7 @@ export const InterviewRoom: React.FC = () => {
             >
               {cameraActive ? <Video className="h-5 w-5" /> : <VideoOff className="h-5 w-5" />}
             </button>
-            <button className="rounded-full p-3 bg-slate-800 text-slate-200 hover:bg-slate-700 cursor-pointer" title="Share Screen">
+            <button className="rounded-full p-3 bg-slate-800 text-slate-200 hover:bg-slate-700 cursor-pointer" title={t('room.share_screen')}>
               <Monitor className="h-5 w-5" />
             </button>
           </div>
@@ -1446,7 +1447,7 @@ export const InterviewRoom: React.FC = () => {
           ) : (
             <div className="bg-[#1e293b]/20 border-b border-slate-800 px-4 py-3 flex items-center gap-2">
               <HelpCircle className="h-4 w-4 text-slate-500" />
-              <span className="text-xs text-slate-500 font-medium">Waiting for interviewer to pick a question...</span>
+              <span className="text-xs text-slate-500 font-medium">{t('room.waiting_question_pick')}</span>
             </div>
           )}
 
@@ -1456,14 +1457,14 @@ export const InterviewRoom: React.FC = () => {
                 <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4 shrink-0">
                   <div className="flex items-center gap-2">
                     <Mic className="h-5 w-5 text-brand" />
-                    <h3 className="text-sm font-bold text-white">HR Voice Answering Console</h3>
+                    <h3 className="text-sm font-bold text-white">{t('room.hr_console')}</h3>
                   </div>
                   {((session?.hrTranscript) || localTranscript) && (
                     <button
                       onClick={clearTranscript}
-                      className="text-xs text-slate-500 hover:text-slate-300 flex items-center gap-1 cursor-pointer focus:outline-none"
+                      className="text-xs text-slate-505 hover:text-slate-300 flex items-center gap-1 cursor-pointer focus:outline-none"
                     >
-                      <Trash2 className="h-3.5 w-3.5" /> Clear transcript
+                      <Trash2 className="h-3.5 w-3.5" /> {t('room.clear_transcript')}
                     </button>
                   )}
                 </div>
@@ -1490,12 +1491,12 @@ export const InterviewRoom: React.FC = () => {
                   </div>
                   
                   <h4 className="text-xs font-bold text-slate-200 mb-1">
-                    {isRecording ? 'Recording Answer Live...' : 'Ready to Record Spoken Answer'}
+                    {isRecording ? t('room.recording_answer') : t('room.ready_record')}
                   </h4>
-                  <p className="text-[11px] text-slate-400 max-w-xs leading-normal">
+                  <p className="text-[11px] text-slate-404 max-w-xs leading-normal">
                     {isRecording 
-                      ? 'We are converting your speech to text in real-time. Click the microphone again to stop and evaluate.' 
-                      : 'Speak your HR response using web speech recognition. We will analyze your STAR structure and filler words.'}
+                      ? t('room.recording_active_desc')
+                      : t('room.recording_ready_desc')}
                   </p>
                 </div>
 
@@ -1503,12 +1504,12 @@ export const InterviewRoom: React.FC = () => {
                 <div className="flex flex-col flex-1 min-h-[160px] mb-6">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                      Live Answer Transcript
+                      {t('room.live_transcript')}
                     </span>
                     {isRecording && (
                       <span className="flex items-center gap-1 text-[10px] text-red-400 font-semibold">
                         <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse"></span>
-                        Live Dictation Active
+                        {t('room.live_dictation_active')}
                       </span>
                     )}
                   </div>
@@ -1521,21 +1522,21 @@ export const InterviewRoom: React.FC = () => {
                 {isAnalyzingVoice && (
                   <div className="flex flex-col items-center justify-center p-6 bg-slate-900/40 border border-slate-800 rounded-xl animate-pulse mb-6">
                     <RotateCw className="h-7 w-7 text-brand animate-spin mb-2" />
-                    <span className="text-xs text-slate-350">Claude is evaluating answer clarity and STAR alignment...</span>
+                    <span className="text-xs text-slate-355">{t('room.evaluating_star')}</span>
                   </div>
                 )}
 
                 {session?.hrScores && !isAnalyzingVoice && (
                   <div className="bg-[#131b2e] border border-slate-850 rounded-xl p-5 shadow-sm space-y-4">
                     <h4 className="text-xs font-bold text-brand uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-800 pb-2">
-                      <Sparkles className="h-4 w-4" /> AI STAR Assessment Scorecard
+                      <Sparkles className="h-4 w-4" /> {t('room.star_scorecard')}
                     </h4>
                     
                     <div className="grid grid-cols-4 gap-2.5">
                       {/* Clarity Card */}
                       <div className="bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 text-center">
-                        <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider block mb-1">
-                          Clarity
+                        <span className="text-[9px] text-slate-505 font-bold uppercase tracking-wider block mb-1">
+                          {t('room.clarity')}
                         </span>
                         <span className="text-base font-extrabold text-emerald-400">
                           {session.hrScores.clarity_score}/10
@@ -1544,8 +1545,8 @@ export const InterviewRoom: React.FC = () => {
                       
                       {/* STAR Structure Card */}
                       <div className="bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 text-center">
-                        <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider block mb-1">
-                          STAR structure
+                        <span className="text-[9px] text-slate-505 font-bold uppercase tracking-wider block mb-1">
+                          {t('room.star_structure')}
                         </span>
                         <span className="text-base font-extrabold text-indigo-400">
                           {session.hrScores.structure_score}/10
@@ -1554,8 +1555,8 @@ export const InterviewRoom: React.FC = () => {
 
                       {/* Confidence Score Card */}
                       <div className="bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 text-center">
-                        <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider block mb-1">
-                          Confidence
+                        <span className="text-[9px] text-slate-505 font-bold uppercase tracking-wider block mb-1">
+                          {t('room.confidence')}
                         </span>
                         <span className="text-base font-extrabold text-violet-400">
                           {session.hrScores.confidence_score !== undefined ? `${session.hrScores.confidence_score}/10` : 'N/A'}
@@ -1564,8 +1565,8 @@ export const InterviewRoom: React.FC = () => {
 
                       {/* Filler Words Card */}
                       <div className="bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 text-center">
-                        <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider block mb-1">
-                          Filler words
+                        <span className="text-[9px] text-slate-505 font-bold uppercase tracking-wider block mb-1">
+                          {t('room.filler_words')}
                         </span>
                         <span className={`text-base font-extrabold ${
                           session.hrScores.filler_word_count > 3 ? 'text-amber-400' : 'text-slate-350'
@@ -1579,8 +1580,8 @@ export const InterviewRoom: React.FC = () => {
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 border-t border-slate-800/60 pt-3.5">
                         {/* WPM Speedometer Card */}
                         <div className="md:col-span-1 bg-[#0f172a] border border-slate-800 rounded-lg p-3 flex flex-col items-center justify-center text-center">
-                          <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider block mb-1.5">
-                            Speaking Pace (WPM)
+                          <span className="text-[9px] text-slate-505 font-bold uppercase tracking-wider block mb-1.5">
+                            {t('room.speaking_pace')}
                           </span>
                           
                           <div className="relative w-28 h-14 flex items-center justify-center overflow-hidden">
@@ -1631,17 +1632,17 @@ export const InterviewRoom: React.FC = () => {
                         {/* Pace Feedback summary card */}
                         <div className="md:col-span-2 bg-[#0f172a] border border-slate-800 rounded-lg p-3 flex flex-col justify-center text-left">
                           <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider block mb-1">
-                            Pacing Feedback
+                            {t('room.pacing_feedback')}
                           </span>
                           <p className="text-[11px] text-slate-300 leading-relaxed font-sans">
-                            {session.hrScores.specific_feedback || 'Speaking pacing has been evaluated for this session.'}
+                            {session.hrScores.specific_feedback || t('room.pacing_evaluated')}
                           </p>
                         </div>
                       </div>
                     )}
 
                     <div className="bg-[#0f172a]/60 border border-slate-800/80 rounded-lg p-3.5">
-                      <span className="text-[10px] font-bold text-slate-400 block mb-1">Feedback Summary</span>
+                      <span className="text-[10px] font-bold text-slate-400 block mb-1">{t('room.feedback_summary')}</span>
                       <p className="text-xs text-slate-300 leading-relaxed font-sans">
                         {session.hrScores.feedback}
                       </p>
@@ -1654,7 +1655,7 @@ export const InterviewRoom: React.FC = () => {
                 {/* Editor Header controls */}
                 <div className="flex h-11 shrink-0 items-center justify-between border-b border-slate-800 bg-[#131b2e] px-3">
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-semibold tracking-wider text-slate-400 uppercase">SOLUTION.JS</span>
+                    <span className="text-[10px] font-semibold tracking-wider text-slate-400 uppercase">{t('room.solution_tab')}</span>
                     <select
                       value={language}
                       onChange={handleLanguageChange}
@@ -1674,11 +1675,11 @@ export const InterviewRoom: React.FC = () => {
                   >
                     {isRunning || (lastOutput?.status === 'idle') ? (
                       <>
-                        <RotateCw className="h-3 w-3 animate-spin" /> Running
+                        <RotateCw className="h-3 w-3 animate-spin" /> {t('room.running')}
                       </>
                     ) : (
                       <>
-                        <Play className="h-3.5 w-3.5 fill-current" /> Run Code
+                        <Play className="h-3.5 w-3.5 fill-current" /> {t('room.run_code')}
                       </>
                     )}
                   </button>
@@ -1713,7 +1714,7 @@ export const InterviewRoom: React.FC = () => {
                       onClick={() => setIsTerminalCollapsed(!isTerminalCollapsed)}
                       className="text-[10px] font-semibold tracking-wider text-slate-400 uppercase flex items-center gap-1.5 focus:outline-none hover:text-slate-200 cursor-pointer"
                     >
-                      <Terminal className="h-3 w-3" /> Console Output {isTerminalCollapsed ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                      <Terminal className="h-3 w-3" /> {t('room.console_output')} {isTerminalCollapsed ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                     </button>
                     
                     {!isTerminalCollapsed && (
@@ -1727,7 +1728,7 @@ export const InterviewRoom: React.FC = () => {
                         }}
                         className="text-[10px] text-slate-500 hover:text-slate-300 flex items-center gap-0.5 focus:outline-none cursor-pointer"
                       >
-                        <Trash2 className="h-3 w-3" /> Clear
+                        <Trash2 className="h-3 w-3" /> {t('room.clear')}
                       </button>
                     )}
                   </div>
@@ -1735,23 +1736,23 @@ export const InterviewRoom: React.FC = () => {
                   {!isTerminalCollapsed && (
                     <pre className="flex-1 overflow-auto p-4 text-[11px] font-mono leading-relaxed select-text whitespace-pre-wrap">
                       {!lastOutput ? (
-                        <span className="text-slate-600">Console initialized. Ready to execute code solutions.</span>
+                        <span className="text-slate-600">{t('room.console_ready')}</span>
                       ) : lastOutput.status === 'idle' ? (
                         <span className="text-slate-400 animate-pulse flex items-center gap-1.5">
-                          <RotateCw className="h-3.5 w-3.5 animate-spin" /> Compiling and running build inside Judge0 sandboxed runtime...
+                          <RotateCw className="h-3.5 w-3.5 animate-spin" /> {t('room.console_running')}
                         </span>
                       ) : lastOutput.status === 'timeout' ? (
                         <span className="text-red-500 font-bold block">
-                          [Timeout Error] Execution exceeded 10 seconds.
+                          {t('room.console_timeout')}
                         </span>
                       ) : lastOutput.status === 'compile_error' ? (
                         <span className="text-amber-500 block">
-                          [Compilation Error]
+                          {t('room.console_compilation_error')}
                           {"\n"}{lastOutput.compileOutput}
                         </span>
                       ) : lastOutput.status === 'error' ? (
                         <span className="text-red-500 block">
-                          [Execution Error]
+                          {t('room.console_execution_error')}
                           {"\n"}{lastOutput.stderr}
                         </span>
                       ) : (
@@ -1780,13 +1781,13 @@ export const InterviewRoom: React.FC = () => {
       <footer className="flex h-8 shrink-0 items-center justify-between border-t border-slate-800 bg-[#0e1626] px-4 text-[10px] text-slate-500">
         <div className="flex items-center gap-2">
           <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span>Both users connected</span>
+          <span>{t('room.both_users_connected')}</span>
           <span className="h-3 w-px bg-slate-800"></span>
-          <span>Latency: 24ms</span>
+          <span>{t('room.latency')}</span>
         </div>
         <div className="flex items-center gap-3">
-          <span>Shortcuts</span>
-          <span>Support</span>
+          <span>{t('room.shortcuts')}</span>
+          <span>{t('room.support')}</span>
         </div>
       </footer>
 
@@ -1803,9 +1804,9 @@ export const InterviewRoom: React.FC = () => {
             <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-4">
               <div>
                 <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  <Brain className="h-5 w-5 text-brand" /> Question bank
+                  <Brain className="h-5 w-5 text-brand" /> {t('room.question_bank')}
                 </h3>
-                <p className="text-[11px] text-slate-400">Search, filter, and push questions to the candidate</p>
+                <p className="text-[11px] text-slate-400">{t('room.search_filter_push')}</p>
               </div>
               <button 
                 onClick={() => {
@@ -1822,35 +1823,35 @@ export const InterviewRoom: React.FC = () => {
             {isCustomQuestionOpen ? (
               <form onSubmit={handleCreateCustomQuestion} className="space-y-4 text-left flex-1 flex flex-col">
                 <div className="flex-1 overflow-y-auto space-y-4 pr-1">
-                  <h4 className="text-xs font-bold text-brand uppercase tracking-wider">Create Custom Question</h4>
+                  <h4 className="text-xs font-bold text-brand uppercase tracking-wider">{t('room.create_custom_question')}</h4>
                   
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Title</label>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t('room.title')}</label>
                     <input
                       type="text"
                       required
                       value={customTitle}
                       onChange={(e) => setCustomTitle(e.target.value)}
-                      placeholder="e.g. Reverse a String"
+                      placeholder={t('room.title_placeholder')}
                       className="block w-full rounded-lg border border-slate-800 bg-[#0f172a] p-2.5 text-xs text-slate-300 placeholder-slate-600 focus:border-brand focus:outline-none"
                     />
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Description</label>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t('room.description')}</label>
                     <textarea
                       rows={5}
                       required
                       value={customDesc}
                       onChange={(e) => setCustomDesc(e.target.value)}
-                      placeholder="e.g. Implement a function that reverses a string input in-place..."
+                      placeholder={t('room.desc_placeholder')}
                       className="block w-full rounded-lg border border-slate-800 bg-[#0f172a] p-2.5 text-xs text-slate-300 placeholder-slate-600 focus:border-brand focus:outline-none resize-none font-mono"
                     />
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Category</label>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t('room.category')}</label>
                       <select
                         value={customCategory}
                         onChange={(e) => setCustomCategory(e.target.value as any)}
@@ -1863,7 +1864,7 @@ export const InterviewRoom: React.FC = () => {
                       </select>
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Difficulty</label>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t('room.difficulty')}</label>
                       <select
                         value={customDifficulty}
                         onChange={(e) => setCustomDifficulty(e.target.value as any)}
@@ -1883,37 +1884,37 @@ export const InterviewRoom: React.FC = () => {
                     onClick={() => setIsCustomQuestionOpen(false)}
                     className="flex-1 rounded-lg border border-slate-800 py-2.5 text-xs font-semibold text-slate-400 hover:text-white"
                   >
-                    Cancel
+                    {t('room.cancel')}
                   </button>
                   <button
                     type="submit"
                     className="flex-1 rounded-lg bg-brand hover:bg-brand-hover text-white py-2.5 text-xs font-bold"
                   >
-                    Add Question
+                    {t('room.add_question')}
                   </button>
                 </div>
               </form>
             ) : isAIQuestionOpen ? (
               <div className="flex-1 flex flex-col overflow-hidden text-left">
                 <h4 className="text-xs font-bold text-brand uppercase tracking-wider mb-4 flex items-center gap-1.5">
-                  <Sparkles className="h-4.5 w-4.5 animate-pulse" /> AI Question Generator
+                  <Sparkles className="h-4.5 w-4.5 animate-pulse" /> {t('room.ai_question_generator')}
                 </h4>
 
                 <form onSubmit={handleGenerateQuestions} className="space-y-4 shrink-0 pb-4 border-b border-slate-800">
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Job Role</label>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t('room.job_role')}</label>
                     <input
                       type="text"
                       required
                       value={jobRole}
                       onChange={(e) => setJobRole(e.target.value)}
-                      placeholder="e.g. Frontend Engineer at Swiggy"
+                      placeholder={t('room.job_role_placeholder')}
                       className="block w-full rounded-lg border border-slate-800 bg-[#0f172a] p-2.5 text-xs text-slate-300 placeholder-slate-600 focus:border-brand focus:outline-none"
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Difficulty</label>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">{t('room.difficulty')}</label>
                     <div className="flex gap-2">
                       {(['Easy', 'Medium', 'Hard'] as const).map((diff, idx, arr) => (
                         <button
@@ -1962,12 +1963,12 @@ export const InterviewRoom: React.FC = () => {
                         className="h-4 w-4 rounded border-slate-800 bg-[#0f172a] text-brand focus:ring-brand focus:ring-opacity-25 cursor-pointer"
                       />
                       <label htmlFor="tailorToResume" className="text-xs text-slate-300 font-semibold cursor-pointer select-none">
-                        Tailor to my resume
+                        {t('room.tailor_to_resume')}
                       </label>
                     </div>
                     {tailorToResume && !candidateProfile?.resumeText && !MOCK_MODE && (
                       <p className="text-[10px] text-amber-500 font-medium leading-normal">
-                        ⚠️ No resume text found in candidate profile. Make sure a PDF resume has been uploaded in Dashboard settings.
+                        {t('room.no_resume_warning')}
                       </p>
                     )}
                   </div>
@@ -1979,11 +1980,11 @@ export const InterviewRoom: React.FC = () => {
                   >
                     {isGenerating ? (
                       <>
-                        <RotateCw className="h-3.5 w-3.5 animate-spin" /> Generating...
+                        <RotateCw className="h-3.5 w-3.5 animate-spin" /> {t('room.generating')}
                       </>
                     ) : (
                       <>
-                        Generate Questions
+                        {t('room.generate_questions')}
                       </>
                     )}
                   </button>
@@ -1994,7 +1995,7 @@ export const InterviewRoom: React.FC = () => {
                   {isGenerating && (
                     <div className="text-center py-12 text-slate-500">
                       <RotateCw className="h-8 w-8 text-brand animate-spin mx-auto mb-2" />
-                      <p className="text-xs">Claude is crafting questions for your role...</p>
+                      <p className="text-xs">{t('room.claude_crafting')}</p>
                     </div>
                   )}
 
@@ -2005,18 +2006,18 @@ export const InterviewRoom: React.FC = () => {
                         onClick={handleGenerateQuestions}
                         className="rounded bg-red-650 hover:bg-red-700 text-white px-4 py-1.5 text-xs font-bold cursor-pointer mx-auto"
                       >
-                        Retry
+                        {t('room.retry')}
                       </button>
                     </div>
                   )}
 
                   {!isGenerating && !genError && generatedQuestions.length > 0 && (
                     <div className="space-y-4 text-left">
-                      <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Generated Questions</h5>
+                      <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{t('room.generated_questions')}</h5>
                       {tailorToResume && (
                         <div className="p-3 bg-indigo-950/20 border border-indigo-900/40 rounded-xl mb-3 text-left">
                           <span className="text-[9px] font-bold text-indigo-400 uppercase tracking-wider block mb-1.5">
-                            Detected Skills
+                            {t('room.detected_skills')}
                           </span>
                           <div className="flex flex-wrap gap-1.5">
                             {detectSkills(candidateProfile?.resumeText || MOCK_CANDIDATE_RESUME).map((skill) => (
@@ -2058,11 +2059,11 @@ export const InterviewRoom: React.FC = () => {
                             >
                               {isSaved ? (
                                 <>
-                                  <Save className="h-3.5 w-3.5" /> Saved to bank
+                                  <Save className="h-3.5 w-3.5" /> {t('room.saved_to_bank')}
                                 </>
                               ) : (
                                 <>
-                                  Save to bank
+                                  {t('room.save_to_bank')}
                                 </>
                               )}
                             </button>
@@ -2083,7 +2084,7 @@ export const InterviewRoom: React.FC = () => {
                     }}
                     className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-slate-800 hover:bg-slate-900 text-slate-300 py-3 text-xs font-bold transition-all cursor-pointer"
                   >
-                    Back to question bank
+                    {t('room.back_to_bank')}
                   </button>
                 </div>
               </div>
@@ -2094,7 +2095,7 @@ export const InterviewRoom: React.FC = () => {
                   onClick={() => setIsAIQuestionOpen(true)}
                   className="mb-4 w-full flex items-center justify-center gap-1.5 rounded-lg bg-linear-to-r from-teal-500 to-indigo-600 hover:from-teal-650 hover:to-indigo-750 text-white py-2.5 text-xs font-bold shadow-md transition-all cursor-pointer"
                 >
-                  <Sparkles className="h-4 w-4" /> Generate questions
+                  <Sparkles className="h-4 w-4" /> {t('room.generate_questions')}
                 </button>
 
                 {/* Search Bar */}
@@ -2104,7 +2105,7 @@ export const InterviewRoom: React.FC = () => {
                   </span>
                   <input
                     type="text"
-                    placeholder="Search questions..."
+                    placeholder={t('room.search_questions')}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="block w-full rounded-lg border border-slate-800 bg-[#0f172a] py-2.5 pl-9 pr-3 text-xs text-slate-300 placeholder-slate-500 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
@@ -2189,7 +2190,7 @@ export const InterviewRoom: React.FC = () => {
 
                           <div className="flex items-center justify-between mt-1 pt-2 border-t border-slate-800/40">
                             <span className="text-[10px] text-slate-500 font-semibold">
-                              Avg time: {avgTime}
+                              {t('room.avg_time', { time: avgTime })}
                             </span>
                             
                             {/* Sync Status Badge if selected */}
@@ -2210,7 +2211,7 @@ export const InterviewRoom: React.FC = () => {
                                 : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
                             }`}
                           >
-                            {isActive ? 'Question Active' : 'Use this question'}
+                            {isActive ? t('room.question_active') : t('room.use_this_question')}
                           </button>
                         </div>
                       );
@@ -2223,7 +2224,7 @@ export const InterviewRoom: React.FC = () => {
                     onClick={() => setIsCustomQuestionOpen(true)}
                     className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-900 py-3 text-xs font-bold shadow-md transition-all cursor-pointer"
                   >
-                    + Create custom question
+                    {t('room.create_custom_btn')}
                   </button>
                 </div>
               </div>

@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import * as Sentry from '@sentry/react'
 import { ErrorFallback } from './components/ErrorFallback'
 import './index.css'
+import './i18n'
 import App from './App.tsx'
 
 Sentry.init({

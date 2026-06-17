@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useTranslation } from 'react-i18next';
 import { Layout } from '../components/Layout';
 import { 
   createSession, 
@@ -56,6 +57,7 @@ const detectSkills = (text?: string): string[] => {
 };
 
 export const Dashboard: React.FC = () => {
+  const { t } = useTranslation();
   const { user, profile, updateProfile } = useAuth();
   const navigate = useNavigate();
 
@@ -427,23 +429,23 @@ export const Dashboard: React.FC = () => {
 
               <div>
                 <h3 className="text-xl font-extrabold tracking-tight bg-linear-to-r from-teal-300 via-emerald-400 to-indigo-300 bg-clip-text text-transparent">
-                  🎉 You're Ready to Ace Your Interviews!
+                  {t('dashboard.onboarding_ready_title')}
                 </h3>
                 <p className="text-sm text-slate-300 mt-2 max-w-2xl leading-relaxed">
-                  Outstanding job! You've completed your onboarding checklist: your profile is complete, your first session is scheduled, you've tried solo AI practice, and your resume is uploaded. You are fully equipped to launch your mock interviews and start tracking your skill gaps!
+                  {t('dashboard.onboarding_ready_desc')}
                 </p>
                 <div className="mt-5 flex flex-wrap items-center gap-3 justify-center sm:justify-start">
                   <button
                     onClick={handleDismiss}
                     className="rounded-xl bg-linear-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 text-slate-950 hover:text-black font-extrabold px-6 py-2.5 text-xs tracking-wider uppercase transition-all shadow-md hover:shadow-teal-500/20 cursor-pointer"
                   >
-                    Start Interviewing
+                    {t('dashboard.start_interviewing')}
                   </button>
                   <button
                     onClick={handleDismiss}
                     className="rounded-xl border border-slate-700 hover:border-slate-500 hover:bg-slate-800 text-slate-300 px-5 py-2.5 text-xs font-bold transition-all cursor-pointer"
                   >
-                    Dismiss
+                    {t('dashboard.dismiss')}
                   </button>
                 </div>
               </div>
@@ -452,7 +454,7 @@ export const Dashboard: React.FC = () => {
             <button
               onClick={handleDismiss}
               className="text-slate-400 hover:text-white transition-colors cursor-pointer p-1 rounded-full hover:bg-slate-800"
-              title="Dismiss"
+              title={t('dashboard.dismiss')}
             >
               <X className="h-5 w-5" />
             </button>
@@ -466,16 +468,16 @@ export const Dashboard: React.FC = () => {
         <div className="flex items-start justify-between mb-4">
           <div>
             <h3 className="text-sm font-bold text-slate-800 dark:text-white uppercase tracking-wider">
-              Getting Started Checklist
+              {t('dashboard.getting_started')}
             </h3>
             <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-              Complete these 4 quick steps to fully configure your preparation workspace.
+              {t('dashboard.getting_started_desc')}
             </p>
           </div>
           <button
             onClick={handleDismiss}
-            className="text-slate-400 hover:text-slate-650 dark:hover:text-slate-200 transition-colors cursor-pointer"
-            title="Dismiss Checklist"
+            className="text-slate-400 hover:text-slate-655 dark:hover:text-slate-200 transition-colors cursor-pointer"
+            title={t('dashboard.dismiss')}
           >
             <X className="h-5 w-5" />
           </button>
@@ -484,8 +486,8 @@ export const Dashboard: React.FC = () => {
         {/* Progress Section */}
         <div className="mb-6">
           <div className="flex items-center justify-between text-xs font-semibold text-slate-600 dark:text-slate-350">
-            <span>Progress</span>
-            <span className="font-mono text-slate-500 dark:text-slate-400">{completedCount} of 4 complete</span>
+            <span>{t('dashboard.progress')}</span>
+            <span className="font-mono text-slate-500 dark:text-slate-400">{t('dashboard.complete_count_msg', { completed: completedCount })}</span>
           </div>
           <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden mt-1.5">
             <div 
@@ -512,8 +514,8 @@ export const Dashboard: React.FC = () => {
               <Circle className="h-5 w-5 text-slate-400 dark:text-slate-600 shrink-0 mt-0.5" />
             )}
             <div>
-              <p className="text-xs font-bold">Complete profile</p>
-              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">Select role and topics</p>
+              <p className="text-xs font-bold">{t('dashboard.complete_profile')}</p>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">{t('dashboard.complete_profile_desc')}</p>
             </div>
           </div>
 
@@ -542,8 +544,8 @@ export const Dashboard: React.FC = () => {
               <Circle className="h-5 w-5 text-slate-400 dark:text-slate-600 shrink-0 mt-0.5" />
             )}
             <div>
-              <p className="text-xs font-bold">Schedule session</p>
-              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">Book peer mock session</p>
+              <p className="text-xs font-bold">{t('dashboard.schedule_session')}</p>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">{t('dashboard.schedule_session_desc')}</p>
             </div>
           </div>
 
@@ -557,13 +559,13 @@ export const Dashboard: React.FC = () => {
             }`}
           >
             {soloAttempted ? (
-              <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
+              <CheckCircle2 className="h-5 w-5 text-emerald-550 shrink-0 mt-0.5" />
             ) : (
               <Circle className="h-5 w-5 text-slate-400 dark:text-slate-600 shrink-0 mt-0.5" />
             )}
             <div>
-              <p className="text-xs font-bold">Try solo practice</p>
-              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">Mock interview with AI</p>
+              <p className="text-xs font-bold">{t('dashboard.try_solo')}</p>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">{t('dashboard.try_solo_desc')}</p>
             </div>
           </div>
 
@@ -587,8 +589,8 @@ export const Dashboard: React.FC = () => {
               <Circle className="h-5 w-5 text-slate-400 dark:text-slate-600 shrink-0 mt-0.5" />
             )}
             <div>
-              <p className="text-xs font-bold">Upload resume</p>
-              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">Extract skills from PDF</p>
+              <p className="text-xs font-bold">{t('dashboard.upload_resume')}</p>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">{t('dashboard.upload_resume_desc')}</p>
             </div>
           </div>
         </div>
@@ -609,7 +611,7 @@ export const Dashboard: React.FC = () => {
               <Calendar className="h-6 w-6" />
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Sessions</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{t('dashboard.total_sessions')}</p>
               <p className="text-2xl font-bold text-slate-800">{totalSessions > 0 ? totalSessions : 12}</p>
             </div>
           </div>
@@ -620,7 +622,7 @@ export const Dashboard: React.FC = () => {
               <TrendingUp className="h-6 w-6" />
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Average Score</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{t('dashboard.average_score')}</p>
               <p className="text-2xl font-bold text-slate-800">
                 {averageScore !== 'N/A' ? `${averageScore}/10` : '7.8/10'}
               </p>
@@ -634,7 +636,7 @@ export const Dashboard: React.FC = () => {
                 <Clock className="h-6 w-6" />
               </div>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-brand-light/75">Upcoming Sessions</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-brand-light/75">{t('dashboard.upcoming_sessions')}</p>
                 <p className="text-2xl font-bold">{upcomingCount > 0 ? upcomingCount : 2}</p>
               </div>
             </div>
@@ -646,8 +648,8 @@ export const Dashboard: React.FC = () => {
           {/* Left / Middle: Upcoming Sessions */}
           <div className="lg:col-span-2 space-y-6">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold text-slate-800">Upcoming Sessions</h2>
-              <span className="text-xs font-medium text-brand hover:underline cursor-pointer">View all &rarr;</span>
+              <h2 className="text-lg font-bold text-slate-800">{t('dashboard.upcoming_sessions')}</h2>
+              <span className="text-xs font-medium text-brand hover:underline cursor-pointer">{t('dashboard.view_all')} &rarr;</span>
             </div>
 
             {loading ? (
@@ -655,158 +657,158 @@ export const Dashboard: React.FC = () => {
                 <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand border-t-transparent"></div>
               </div>
             ) : sessions.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center">
-                <Calendar className="mx-auto h-12 w-12 text-slate-300" />
-                <h3 className="mt-4 text-sm font-semibold text-slate-700">No scheduled sessions</h3>
-                <p className="mt-1 text-xs text-slate-500">Create a session and share the invite link to start mock interviews.</p>
-                <button
-                  onClick={() => {
-                    setIsRescheduleMode(false);
-                    setRescheduleSessionId(null);
-                    setModalDate('');
-                    setModalTime('');
-                    setModalDuration(45);
-                    setGeneratedSessionId(Math.random().toString(36).substring(2, 7) + '-' + Math.random().toString(36).substring(2, 7));
-                    setIsModalOpen(true);
-                  }}
-                  className="mt-4 inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover cursor-pointer"
-                >
-                  <Plus className="h-4 w-4" /> Schedule Session
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {sessions.map((session) => {
-                  const isHost = session.hostId === user?.uid;
-                  const hasPartner = !!session.guestId;
-                  const partnerName = isHost ? (session.guestName || 'Waiting for peer...') : session.hostName;
+               <div className="rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center">
+                 <Calendar className="mx-auto h-12 w-12 text-slate-300" />
+                 <h3 className="mt-4 text-sm font-semibold text-slate-700">{t('dashboard.no_sessions')}</h3>
+                 <p className="mt-1 text-xs text-slate-500">{t('dashboard.no_sessions_desc')}</p>
+                 <button
+                   onClick={() => {
+                     setIsRescheduleMode(false);
+                     setRescheduleSessionId(null);
+                     setModalDate('');
+                     setModalTime('');
+                     setModalDuration(45);
+                     setGeneratedSessionId(Math.random().toString(36).substring(2, 7) + '-' + Math.random().toString(36).substring(2, 7));
+                     setIsModalOpen(true);
+                   }}
+                   className="mt-4 inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover cursor-pointer"
+                 >
+                   <Plus className="h-4 w-4" /> {t('dashboard.schedule_session_btn')}
+                 </button>
+               </div>
+             ) : (
+               <div className="space-y-4">
+                 {sessions.map((session) => {
+                   const isHost = session.hostId === user?.uid;
+                   const hasPartner = !!session.guestId;
+                   const partnerName = isHost ? (session.guestName || t('dashboard.waiting_peer')) : session.hostName;
 
-                  return (
-                    <div 
-                      key={session.id} 
-                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:border-slate-300"
-                    >
-                      <div className="flex items-start gap-4">
-                        <div className="rounded-full bg-slate-100 p-3 shrink-0">
-                          {getTopicIcon(session.topic)}
-                        </div>
-                        <div>
-                          <h3 className="text-sm font-bold text-slate-800">{session.topicDetail}</h3>
-                          <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
-                            <span className="flex items-center gap-1 font-medium">
-                              <span className="font-semibold text-slate-700">Partner:</span> {partnerName}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <Calendar className="h-3.5 w-3.5" /> {session.date} at {session.time}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <Clock className="h-3.5 w-3.5" /> {session.duration} mins
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-2 sm:self-center shrink-0">
-                          {/* If no partner and host, show Invite sharing link */}
-                          {isHost && !hasPartner && (
-                            <button
-                              onClick={() => handleCopyLink(session.inviteLink, session.id)}
-                              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-600 px-3.5 py-1.5 text-xs font-semibold transition-all cursor-pointer"
-                            >
-                              {copiedSessionId === session.id ? (
-                                <>
-                                  <Check className="h-3.5 w-3.5 text-green-600" /> Copied Link
-                                </>
-                              ) : (
-                                <>
-                                  <Copy className="h-3.5 w-3.5" /> Invite Link
-                                </>
-                              )}
-                            </button>
-                          )}
-
-                          {/* If guest is empty and current user is NOT host, allow joining from dashboard list */}
-                          {!isHost && !hasPartner && (
-                            <button
-                              onClick={async () => {
-                                if (!user) return;
-                                await updateSession(session.id, {
-                                  guestId: user.uid,
-                                  guestName: profile?.displayName || user.displayName || 'Guest',
-                                });
-                              }}
-                              className="inline-flex items-center gap-1 rounded-lg bg-teal-50 hover:bg-teal-100 text-brand px-3.5 py-1.5 text-xs font-bold transition-all cursor-pointer"
-                            >
-                              <UserPlus className="h-3.5 w-3.5" /> Join Session
-                            </button>
-                          )}
-
-                          {/* Main enter button for the room */}
-                          {(hasPartner || isHost) && (
-                            <button
-                              onClick={() => navigate(`/room/${session.id}`)}
-                              className="inline-flex items-center gap-1 rounded-lg bg-brand hover:bg-brand-hover text-white px-4 py-2 text-xs font-bold shadow-sm transition-all cursor-pointer"
-                            >
-                              Join Session <ArrowRight className="h-3.5 w-3.5" />
-                            </button>
-                          )}
-
-                           {/* Dropdown menu for Reschedule / Cancel */}
-                           <div className="relative font-sans">
-                             <button
-                               onClick={() => setMenuOpenId(menuOpenId === session.id ? null : session.id)}
-                               className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-650 dark:hover:text-slate-200 rounded-full transition-colors cursor-pointer"
-                             >
-                               <MoreHorizontal className="h-4 w-4" />
-                             </button>
-                             {menuOpenId === session.id && (
-                               <div className="absolute right-0 mt-2 w-40 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg z-10 overflow-hidden">
-                                 <button
-                                   onClick={() => {
-                                     setIsRescheduleMode(true);
-                                     setRescheduleSessionId(session.id);
-                                     setModalTopic(session.topic as any);
-                                     setModalDate(session.date);
-                                     setModalTime(session.time);
-                                     setModalDuration(session.duration as any);
-                                     setGeneratedSessionId(session.id);
-                                     setIsModalOpen(true);
-                                     setMenuOpenId(null);
-                                   }}
-                                   className="block w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-750 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors cursor-pointer"
-                                 >
-                                   Reschedule
-                                 </button>
-                                 <button
-                                   onClick={async () => {
-                                     if (window.confirm("Are you sure? Your partner will be notified.")) {
-                                       await deleteSession(session.id);
-                                     }
-                                     setMenuOpenId(null);
-                                   }}
-                                   className="block w-full text-left px-4 py-2.5 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-slate-50 dark:hover:bg-slate-700 border-t border-slate-100 dark:border-slate-700 transition-colors cursor-pointer"
-                                 >
-                                   Cancel
-                                 </button>
-                               </div>
-                             )}
+                   return (
+                     <div 
+                       key={session.id} 
+                       className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:border-slate-300"
+                     >
+                       <div className="flex items-start gap-4">
+                         <div className="rounded-full bg-slate-100 p-3 shrink-0">
+                           {getTopicIcon(session.topic)}
+                         </div>
+                         <div>
+                           <h3 className="text-sm font-bold text-slate-800">{session.topicDetail}</h3>
+                           <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
+                             <span className="flex items-center gap-1 font-medium">
+                               <span className="font-semibold text-slate-700">{t('dashboard.partner')}:</span> {partnerName}
+                             </span>
+                             <span className="flex items-center gap-1">
+                               <Calendar className="h-3.5 w-3.5" /> {session.date} {t('dashboard.at')} {session.time}
+                             </span>
+                             <span className="flex items-center gap-1">
+                               <Clock className="h-3.5 w-3.5" /> {session.duration} {t('dashboard.mins')}
+                             </span>
                            </div>
-                        </div>
-                    </div>
-                  );
-                })}
-              </div>
+                         </div>
+                       </div>
+
+                       <div className="flex flex-wrap items-center gap-2 sm:self-center shrink-0">
+                           {/* If no partner and host, show Invite sharing link */}
+                           {isHost && !hasPartner && (
+                             <button
+                               onClick={() => handleCopyLink(session.inviteLink, session.id)}
+                               className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-600 px-3.5 py-1.5 text-xs font-semibold transition-all cursor-pointer"
+                             >
+                               {copiedSessionId === session.id ? (
+                                 <>
+                                   <Check className="h-3.5 w-3.5 text-green-600" /> {t('dashboard.copied_link')}
+                                 </>
+                               ) : (
+                                 <>
+                                   <Copy className="h-3.5 w-3.5" /> {t('dashboard.invite_link')}
+                                 </>
+                               )}
+                             </button>
+                           )}
+
+                           {/* If guest is empty and current user is NOT host, allow joining from dashboard list */}
+                           {!isHost && !hasPartner && (
+                             <button
+                               onClick={async () => {
+                                 if (!user) return;
+                                 await updateSession(session.id, {
+                                   guestId: user.uid,
+                                   guestName: profile?.displayName || user.displayName || 'Guest',
+                                 });
+                               }}
+                               className="inline-flex items-center gap-1 rounded-lg bg-teal-50 hover:bg-teal-100 text-brand px-3.5 py-1.5 text-xs font-bold transition-all cursor-pointer"
+                             >
+                               <UserPlus className="h-3.5 w-3.5" /> {t('dashboard.join_session')}
+                             </button>
+                           )}
+
+                           {/* Main enter button for the room */}
+                           {(hasPartner || isHost) && (
+                             <button
+                               onClick={() => navigate(`/room/${session.id}`)}
+                               className="inline-flex items-center gap-1 rounded-lg bg-brand hover:bg-brand-hover text-white px-4 py-2 text-xs font-bold shadow-sm transition-all cursor-pointer"
+                             >
+                               {t('dashboard.join_session')} <ArrowRight className="h-3.5 w-3.5" />
+                             </button>
+                           )}
+
+                            {/* Dropdown menu for Reschedule / Cancel */}
+                            <div className="relative font-sans">
+                              <button
+                                onClick={() => setMenuOpenId(menuOpenId === session.id ? null : session.id)}
+                                className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-655 dark:hover:text-slate-200 rounded-full transition-colors cursor-pointer"
+                              >
+                                <MoreHorizontal className="h-4 w-4" />
+                              </button>
+                              {menuOpenId === session.id && (
+                                <div className="absolute right-0 mt-2 w-40 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg z-10 overflow-hidden">
+                                  <button
+                                    onClick={() => {
+                                      setIsRescheduleMode(true);
+                                      setRescheduleSessionId(session.id);
+                                      setModalTopic(session.topic as any);
+                                      setModalDate(session.date);
+                                      setModalTime(session.time);
+                                      setModalDuration(session.duration as any);
+                                      setGeneratedSessionId(session.id);
+                                      setIsModalOpen(true);
+                                      setMenuOpenId(null);
+                                    }}
+                                    className="block w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-750 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                                  >
+                                    {t('dashboard.reschedule')}
+                                  </button>
+                                  <button
+                                    onClick={async () => {
+                                      if (window.confirm(t('dashboard.confirm_cancel_prompt'))) {
+                                        await deleteSession(session.id);
+                                      }
+                                      setMenuOpenId(null);
+                                    }}
+                                    className="block w-full text-left px-4 py-2.5 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-slate-50 dark:hover:bg-slate-700 border-t border-slate-100 dark:border-slate-700 transition-colors cursor-pointer"
+                                  >
+                                    {t('dashboard.cancel')}
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                         </div>
+                     </div>
+                   );
+                 })}
+               </div>
             )}
 
             {/* Simulated Additional widgets to match visual weight of design */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Skill Progress */}
               <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                <h3 className="text-sm font-bold text-slate-800 mb-4">Skill Progress</h3>
+                <h3 className="text-sm font-bold text-slate-800 mb-4">{t('dashboard.skill_progress')}</h3>
                 <div className="space-y-3">
                   <div>
                     <div className="flex justify-between text-xs text-slate-600 mb-1">
-                      <span>Problem Solving</span>
+                      <span>{t('dashboard.problem_solving')}</span>
                       <span className="font-semibold">85%</span>
                     </div>
                     <div className="h-2 w-full rounded-full bg-slate-100 overflow-hidden">
@@ -815,7 +817,7 @@ export const Dashboard: React.FC = () => {
                   </div>
                   <div>
                     <div className="flex justify-between text-xs text-slate-600 mb-1">
-                      <span>System Design</span>
+                      <span>{t('dashboard.system_design')}</span>
                       <span className="font-semibold">62%</span>
                     </div>
                     <div className="h-2 w-full rounded-full bg-slate-100 overflow-hidden">
@@ -827,18 +829,18 @@ export const Dashboard: React.FC = () => {
                   onClick={() => navigate('/skills')}
                   className="mt-4 w-full text-center text-xs font-bold text-brand hover:underline cursor-pointer flex items-center justify-center gap-1"
                 >
-                  View Skill Gap Analysis &rarr;
+                  {t('dashboard.view_skill_gap')} &rarr;
                 </button>
               </div>
 
               {/* Quick Prep */}
               <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm flex flex-col justify-between">
                 <div>
-                  <h3 className="text-sm font-bold text-slate-800 mb-2">Quick Prep</h3>
-                  <p className="text-xs text-slate-500 leading-relaxed">Ready for a quick 10-minute AI mock challenge to brush up on core questions?</p>
+                  <h3 className="text-sm font-bold text-slate-800 mb-2">{t('dashboard.quick_prep')}</h3>
+                  <p className="text-xs text-slate-500 leading-relaxed">{t('dashboard.quick_prep_desc')}</p>
                 </div>
                 <button className="mt-4 w-full inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 py-2 text-xs font-semibold transition-all">
-                  <Sparkles className="h-3.5 w-3.5 text-brand" /> Start AI Blitz
+                  <Sparkles className="h-3.5 w-3.5 text-brand" /> {t('dashboard.start_ai_blitz')}
                 </button>
               </div>
             </div>
@@ -852,23 +854,23 @@ export const Dashboard: React.FC = () => {
                 <Sparkles className="h-28 w-28 text-brand" />
               </div>
               <h3 className="text-sm font-bold flex items-center gap-1.5 uppercase tracking-wider">
-                <Sparkles className="h-4.5 w-4.5 text-brand" /> Live Practice
+                <Sparkles className="h-4.5 w-4.5 text-brand" /> {t('dashboard.live_practice')}
               </h3>
               <p className="mt-2 text-xs text-slate-300 leading-relaxed">
-                Match with a live peer instantly based on topics, or start a solo interview simulation with our AI interviewer.
+                {t('dashboard.live_practice_desc')}
               </p>
               <div className="mt-5 flex flex-col gap-2">
                 <button
                   onClick={() => setIsMatchmakerOpen(true)}
                   className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-brand hover:bg-brand-hover text-white py-2.5 text-xs font-bold shadow-sm transition-all cursor-pointer"
                 >
-                  <UserPlus className="h-4 w-4" /> Find a partner now
+                  <UserPlus className="h-4 w-4" /> {t('dashboard.find_partner_btn')}
                 </button>
                 <button
                   onClick={() => navigate('/solo')}
                   className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white py-2.5 text-xs font-bold shadow-sm border border-slate-700 transition-all cursor-pointer"
                 >
-                  <Sparkles className="h-4 w-4 text-brand" /> Practice solo
+                  <Sparkles className="h-4 w-4 text-brand" /> {t('dashboard.practice_solo_btn')}
                 </button>
               </div>
             </div>
@@ -877,15 +879,15 @@ export const Dashboard: React.FC = () => {
             <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm text-left transition-colors duration-200">
               <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 mb-4">
                 <h3 className="text-sm font-bold text-slate-800 dark:text-white flex items-center gap-1.5 uppercase tracking-wider">
-                  <Copy className="h-4.5 w-4.5 text-brand" /> Resume Profile
+                  <Copy className="h-4.5 w-4.5 text-brand" /> {t('dashboard.resume_profile')}
                 </h3>
                 {profile?.resumeText ? (
                   <span className="text-[10px] bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-bold px-2 py-0.5 rounded">
-                    Active
+                    {t('dashboard.active')}
                   </span>
                 ) : (
                   <span className="text-[10px] bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 font-bold px-2 py-0.5 rounded">
-                    Empty
+                    {t('dashboard.empty')}
                   </span>
                 )}
               </div>
@@ -893,15 +895,15 @@ export const Dashboard: React.FC = () => {
               {isParsingResume ? (
                 <div className="py-4 text-center">
                   <div className="h-5 w-5 animate-spin rounded-full border-2 border-brand border-t-transparent mx-auto mb-2"></div>
-                  <p className="text-xs text-slate-500">Extracting text and updating profile...</p>
+                  <p className="text-xs text-slate-500">{t('dashboard.extracting_text')}</p>
                 </div>
               ) : profile?.resumeText ? (
                 <div className="space-y-3">
                   <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                    Your resume is active. AI question generation will tailor questions to your projects and background.
+                    {t('dashboard.resume_active_desc')}
                   </p>
                   <div>
-                    <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-1">Detected skills</span>
+                    <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-1">{t('dashboard.detected_skills')}</span>
                     <div className="flex flex-wrap gap-1">
                       {detectSkills(profile.resumeText).map((s: string) => (
                         <span key={s} className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-650 dark:text-slate-350 px-2 py-0.5 rounded">
@@ -912,7 +914,7 @@ export const Dashboard: React.FC = () => {
                   </div>
                   <label className="block mt-3">
                     <span className="text-xs text-brand hover:underline font-bold cursor-pointer">
-                      Replace Resume PDF
+                      {t('dashboard.replace_resume')}
                     </span>
                     <input
                       type="file"
@@ -925,12 +927,12 @@ export const Dashboard: React.FC = () => {
               ) : (
                 <div className="space-y-3">
                   <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                    Upload your resume in PDF format to enable personalized questions tailored to your skills.
+                    {t('dashboard.resume_empty_desc')}
                   </p>
                   <label className="flex items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-800 hover:border-brand dark:hover:border-brand rounded-xl py-5 cursor-pointer transition-colors bg-slate-50 dark:bg-slate-900/50">
                     <div className="text-center">
-                      <span className="text-xs font-bold text-brand block">Select PDF</span>
-                      <span className="text-[9px] text-slate-400">Max size 2MB</span>
+                      <span className="text-xs font-bold text-brand block">{t('dashboard.select_pdf')}</span>
+                      <span className="text-[9px] text-slate-405">{t('dashboard.max_size')}</span>
                     </div>
                     <input
                       type="file"
@@ -947,13 +949,13 @@ export const Dashboard: React.FC = () => {
             <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm text-left transition-colors duration-200">
               <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 mb-4">
                 <h3 className="text-sm font-bold text-slate-800 dark:text-white flex items-center gap-1.5 uppercase tracking-wider">
-                  <Award className="h-4.5 w-4.5 text-brand" /> Leaderboard Settings
+                  <Award className="h-4.5 w-4.5 text-brand" /> {t('dashboard.leaderboard_settings')}
                 </h3>
               </div>
               <div className="flex items-center justify-between gap-4">
                 <div className="text-left">
-                  <p className="text-xs font-bold text-slate-800 dark:text-slate-200">Public Rank</p>
-                  <p className="text-[10px] text-slate-400">Show me on the leaderboard</p>
+                  <p className="text-xs font-bold text-slate-800 dark:text-slate-200">{t('dashboard.public_rank')}</p>
+                  <p className="text-[10px] text-slate-400">{t('dashboard.show_on_leaderboard')}</p>
                 </div>
                 <button
                   onClick={handleOptInToggle}
@@ -976,9 +978,9 @@ export const Dashboard: React.FC = () => {
               <div className="absolute right-0 bottom-0 translate-x-4 translate-y-4 opacity-10">
                 <Calendar className="h-32 w-32" />
               </div>
-              <h3 className="text-lg font-bold">Level up your career.</h3>
+              <h3 className="text-lg font-bold">{t('dashboard.level_up_career')}</h3>
               <p className="mt-1 text-xs text-slate-300 leading-relaxed">
-                Book a peer interview or professional review session today to perfect your system design and coding skills.
+                {t('dashboard.level_up_desc')}
               </p>
               <button
                 onClick={() => {
@@ -992,7 +994,7 @@ export const Dashboard: React.FC = () => {
                 }}
                 className="mt-6 flex w-full items-center justify-center gap-2 rounded-lg bg-[#99f6e4] hover:bg-[#5eead4] text-slate-900 py-2.5 text-sm font-bold shadow-sm transition-all cursor-pointer"
               >
-                <Plus className="h-4 w-4" /> Schedule New Session
+                <Plus className="h-4 w-4" /> {t('dashboard.schedule_new_session_btn')}
               </button>
             </div>
 
@@ -1000,7 +1002,7 @@ export const Dashboard: React.FC = () => {
             <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex items-center gap-2 border-b border-slate-100 pb-3 mb-4">
                 <Clock className="h-4 w-4 text-slate-400" />
-                <h3 className="text-sm font-bold text-slate-800">Recent Activity</h3>
+                <h3 className="text-sm font-bold text-slate-800">{t('dashboard.recent_activity')}</h3>
               </div>
               <div className="space-y-4">
                 <div className="flex gap-3">
@@ -1031,14 +1033,14 @@ export const Dashboard: React.FC = () => {
                 </div>
               </div>
               <button className="mt-4 w-full text-center text-xs text-slate-400 font-medium hover:text-slate-600 transition-colors">
-                See all activity
+                {t('dashboard.see_all_activity')}
               </button>
             </div>
 
             {/* Tip of the Day */}
             <div className="rounded-xl border border-slate-200 bg-teal-50/20 p-5 text-center">
               <Sparkles className="mx-auto h-5 w-5 text-teal-600 mb-2" />
-              <p className="text-xs font-bold text-slate-800">Tip of the day</p>
+              <p className="text-xs font-bold text-slate-800">{t('dashboard.tip_of_the_day')}</p>
               <p className="mt-1 text-xs text-slate-500 leading-relaxed italic">
                 "Always explain your thought process before writing code. Reviewers care more about clarity than syntax memorization."
               </p>
@@ -1066,7 +1068,7 @@ export const Dashboard: React.FC = () => {
             {/* Header */}
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="text-lg font-bold text-slate-800">
-                {isRescheduleMode ? 'Reschedule session' : 'Schedule a session'}
+                {isRescheduleMode ? t('scheduling_form.reschedule_title') : t('scheduling_form.schedule_title')}
               </h3>
               <button 
                 onClick={() => {
@@ -1078,8 +1080,8 @@ export const Dashboard: React.FC = () => {
                   setModalDuration(45);
                   setGeneratedSessionId('');
                 }}
-                aria-label="Close scheduling modal"
-                className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-all focus-visible:ring-2 focus-visible:ring-brand focus:outline-none"
+                aria-label={t('scheduling_form.cancel')}
+                className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-655 transition-all focus-visible:ring-2 focus-visible:ring-brand focus:outline-none"
               >
                 <Plus className="h-5 w-5 rotate-45" aria-hidden="true" />
               </button>
@@ -1089,13 +1091,13 @@ export const Dashboard: React.FC = () => {
             <form onSubmit={handleCreateSessionSubmit} className="mt-4 space-y-5">
               {/* Topic Select */}
               <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Interview Topic</label>
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">{t('scheduling_form.interview_topic')}</label>
                 <div className="flex flex-wrap gap-2">
-                  {(['DSA', 'System Design', 'Frontend', 'HR'] as const).map((t, idx, arr) => (
+                  {(['DSA', 'System Design', 'Frontend', 'HR'] as const).map((tVal, idx, arr) => (
                     <button
-                      key={t}
+                      key={tVal}
                       type="button"
-                      onClick={() => setModalTopic(t)}
+                      onClick={() => setModalTopic(tVal)}
                       onKeyDown={(e) => {
                         if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
                           e.preventDefault();
@@ -1116,12 +1118,12 @@ export const Dashboard: React.FC = () => {
                         }
                       }}
                       className={`rounded-full px-4 py-1.5 text-xs font-bold border transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-brand focus:outline-none ${
-                        modalTopic === t
+                        modalTopic === tVal
                           ? 'bg-brand border-brand text-white shadow-sm'
-                          : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                          : 'bg-slate-50 border-slate-200 text-slate-605 hover:bg-slate-100'
                       }`}
                     >
-                      {t}
+                      {tVal}
                     </button>
                   ))}
                 </div>
@@ -1130,7 +1132,7 @@ export const Dashboard: React.FC = () => {
               {/* Date & Time Input */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label htmlFor="modal-date" className="text-xs font-semibold uppercase tracking-wider text-slate-500">Date</label>
+                  <label htmlFor="modal-date" className="text-xs font-semibold uppercase tracking-wider text-slate-500">{t('scheduling_form.date')}</label>
                   <input
                     id="modal-date"
                     type="date"
@@ -1141,7 +1143,7 @@ export const Dashboard: React.FC = () => {
                   />
                 </div>
                 <div className="space-y-1">
-                  <label htmlFor="modal-time" className="text-xs font-semibold uppercase tracking-wider text-slate-500">Time</label>
+                  <label htmlFor="modal-time" className="text-xs font-semibold uppercase tracking-wider text-slate-500">{t('scheduling_form.time')}</label>
                   <input
                     id="modal-time"
                     type="time"
@@ -1155,7 +1157,7 @@ export const Dashboard: React.FC = () => {
 
               {/* Duration Toggle */}
               <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Duration</label>
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">{t('scheduling_form.duration')}</label>
                 <div className="grid grid-cols-3 gap-2">
                   {([30, 45, 60] as const).map((d, idx, arr) => (
                     <button
@@ -1187,7 +1189,7 @@ export const Dashboard: React.FC = () => {
                           : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
                       }`}
                     >
-                      {d} min
+                      {t('scheduling_form.min_label', { count: d })}
                     </button>
                   ))}
                 </div>
@@ -1195,7 +1197,7 @@ export const Dashboard: React.FC = () => {
 
               {/* Share Invite Preview */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Invite Link (Pre-generated)</label>
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">{t('scheduling_form.invite_link_pregen')}</label>
                 <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-slate-600">
                   <span className="text-xs font-mono truncate grow">
                     {window.location.origin}/room/{generatedSessionId}
@@ -1204,8 +1206,8 @@ export const Dashboard: React.FC = () => {
                     type="button"
                     onClick={() => handleCopyLink(`${window.location.origin}/room/${generatedSessionId}`, 'generated')}
                     className="p-1 hover:text-brand transition-colors text-slate-400 focus-visible:ring-2 focus-visible:ring-brand focus:outline-none rounded"
-                    title="Copy invite code"
-                    aria-label="Copy invite code"
+                    title={t('scheduling_form.copy_invite_code')}
+                    aria-label={t('scheduling_form.copy_invite_code')}
                   >
                     {copiedSessionId === 'generated' ? (
                       <Check className="h-4 w-4 text-green-600" />
@@ -1229,15 +1231,15 @@ export const Dashboard: React.FC = () => {
                     setModalDuration(45);
                     setGeneratedSessionId('');
                   }}
-                  className="rounded-lg border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
+                  className="rounded-lg border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-655 hover:bg-slate-50 cursor-pointer"
                 >
-                  Cancel
+                  {t('scheduling_form.cancel')}
                 </button>
                 <button
                   type="submit"
                   className="rounded-lg bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 text-xs font-bold shadow-md transition-all cursor-pointer"
                 >
-                  Confirm session
+                  {t('scheduling_form.confirm_session')}
                 </button>
               </div>
             </form>
@@ -1251,10 +1253,10 @@ export const Dashboard: React.FC = () => {
           <div className="fixed inset-0" onClick={() => setIsMatchmakerOpen(false)}></div>
           <div className="relative w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl z-10">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-lg font-bold text-slate-800">Find a partner now</h3>
+              <h3 className="text-lg font-bold text-slate-800">{t('matchmaker.title')}</h3>
               <button 
                 onClick={() => setIsMatchmakerOpen(false)}
-                aria-label="Close matchmaking modal"
+                aria-label={t('matchmaker.cancel')}
                 className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-all focus-visible:ring-2 focus-visible:ring-brand focus:outline-none"
               >
                 <Plus className="h-5 w-5 rotate-45" aria-hidden="true" />
@@ -1263,13 +1265,13 @@ export const Dashboard: React.FC = () => {
 
             <div className="mt-4 space-y-5">
               <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Choose Topic</label>
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">{t('matchmaker.choose_topic')}</label>
                 <div className="grid grid-cols-2 gap-2">
-                  {(['DSA', 'System Design', 'Frontend', 'HR'] as const).map((t, idx, arr) => (
+                  {(['DSA', 'System Design', 'Frontend', 'HR'] as const).map((tVal, idx, arr) => (
                     <button
-                      key={t}
+                      key={tVal}
                       type="button"
-                      onClick={() => setMatchTopic(t)}
+                      onClick={() => setMatchTopic(tVal)}
                       onKeyDown={(e) => {
                         if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
                           e.preventDefault();
@@ -1290,12 +1292,12 @@ export const Dashboard: React.FC = () => {
                         }
                       }}
                       className={`rounded-lg py-2.5 text-xs font-bold border transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-brand focus:outline-none ${
-                        matchTopic === t
+                        matchTopic === tVal
                           ? 'bg-brand border-brand text-white shadow-sm'
                           : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
                       }`}
                     >
-                      {t}
+                      {tVal}
                     </button>
                   ))}
                 </div>
@@ -1305,16 +1307,16 @@ export const Dashboard: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsMatchmakerOpen(false)}
-                  className="rounded-lg border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
+                  className="rounded-lg border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-655 hover:bg-slate-50 cursor-pointer"
                 >
-                  Cancel
+                  {t('matchmaker.cancel')}
                 </button>
                 <button
                   type="button"
                   onClick={handleStartMatching}
                   className="rounded-lg bg-slate-900 hover:bg-slate-800 text-white px-5 py-2 text-xs font-bold shadow-md transition-all cursor-pointer"
                 >
-                  Start matching
+                  {t('matchmaker.start_matching')}
                 </button>
               </div>
             </div>
@@ -1325,7 +1327,7 @@ export const Dashboard: React.FC = () => {
       {/* MATCHMAKING WAITING SCREEN OVERLAY */}
       {isMatching && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md">
-          <div className="w-full max-w-sm rounded-2xl border border-slate-800 bg-[#0f172a] p-8 text-center text-white shadow-2xl relative overflow-hidden">
+          <div className="w-full max-w-sm rounded-2xl border border-slate-888 bg-[#0f172a] p-8 text-center text-white shadow-2xl relative overflow-hidden">
             {matchingStatus === 'waiting' && (
               <div className="space-y-6">
                 <div className="relative mx-auto w-24 h-24 flex items-center justify-center">
@@ -1338,12 +1340,12 @@ export const Dashboard: React.FC = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <h3 className="text-lg font-bold">Looking for a partner…</h3>
-                  <p className="text-xs text-slate-400">Topic: {matchTopic}</p>
+                  <h3 className="text-lg font-bold">{t('matchmaker.looking_for_partner')}</h3>
+                  <p className="text-xs text-slate-400">{t('matchmaker.topic_label', { topic: matchTopic })}</p>
                 </div>
 
                 <div className="rounded-lg bg-slate-900/60 py-2.5 border border-slate-800/80 text-xs font-semibold font-mono text-slate-300">
-                  Time left: {Math.floor(matchTimeLeft / 60)}:{(matchTimeLeft % 60).toString().padStart(2, '0')}
+                  {t('matchmaker.time_left', { time: `${Math.floor(matchTimeLeft / 60)}:${(matchTimeLeft % 60).toString().padStart(2, '0')}` })}
                 </div>
 
                 <button
@@ -1351,7 +1353,7 @@ export const Dashboard: React.FC = () => {
                   onClick={() => handleCancelMatching(null, false)}
                   className="w-full rounded-lg border border-slate-800 hover:bg-slate-900 text-xs font-semibold text-slate-400 py-2.5 transition-colors cursor-pointer"
                 >
-                  Cancel
+                  {t('matchmaker.cancel')}
                 </button>
               </div>
             )}
@@ -1363,8 +1365,8 @@ export const Dashboard: React.FC = () => {
                 </div>
 
                 <div className="space-y-1">
-                  <h3 className="text-lg font-bold text-emerald-400">Partner found!</h3>
-                  <p className="text-xs text-slate-400">Creating collaborative sandbox session...</p>
+                  <h3 className="text-lg font-bold text-emerald-400">{t('matchmaker.partner_found')}</h3>
+                  <p className="text-xs text-slate-400">{t('matchmaker.creating_sandbox')}</p>
                 </div>
               </div>
             )}
@@ -1376,8 +1378,8 @@ export const Dashboard: React.FC = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <h3 className="text-base font-bold text-red-400">No partner found, try again</h3>
-                  <p className="text-xs text-slate-400 leading-relaxed">We couldn't locate a peer matching your selected topic. Please start matchmaking again or invite a colleague directly.</p>
+                  <h3 className="text-base font-bold text-red-400">{t('matchmaker.no_partner_found')}</h3>
+                  <p className="text-xs text-slate-400 leading-relaxed">{t('matchmaker.no_partner_desc')}</p>
                 </div>
 
                 <button
@@ -1385,7 +1387,7 @@ export const Dashboard: React.FC = () => {
                   onClick={() => setIsMatching(false)}
                   className="w-full rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white py-2.5 transition-colors cursor-pointer"
                 >
-                  Dismiss
+                  {t('matchmaker.dismiss')}
                 </button>
               </div>
             )}

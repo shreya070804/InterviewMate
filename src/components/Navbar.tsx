@@ -1,17 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Bell, Settings, LogOut, User, Menu, X, Sun, Moon, Sparkles } from 'lucide-react';
+import { Bell, Settings, LogOut, User, Menu, X, Sun, Moon, Sparkles, Languages } from 'lucide-react';
 import { subscribeToApiUsage } from '../firebase';
+import { useTranslation } from 'react-i18next';
 
 export const Navbar: React.FC = () => {
+  const { t, i18n } = useTranslation();
   const { user, profile, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [langDropdownOpen, setLangDropdownOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(() => document.documentElement.classList.contains('dark'));
   const [apiCallsToday, setApiCallsToday] = useState(0);
+
+  const changeLanguage = (lng: string) => {
+    i18n.changeLanguage(lng);
+    localStorage.setItem('language', lng);
+    setLangDropdownOpen(false);
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -81,7 +90,7 @@ export const Navbar: React.FC = () => {
                   isActive('/') ? 'text-brand border-b-2 border-brand py-5' : 'text-slate-500 dark:text-slate-400'
                 }`}
               >
-                Dashboard
+                {t('navbar.dashboard')}
               </Link>
               <Link
                 to="/leaderboard"
@@ -89,7 +98,7 @@ export const Navbar: React.FC = () => {
                   isActive('/leaderboard') ? 'text-brand border-b-2 border-brand py-5' : 'text-slate-500 dark:text-slate-400'
                 }`}
               >
-                Leaderboard
+                {t('navbar.leaderboard')}
               </Link>
               <Link
                 to="/history"
@@ -97,7 +106,7 @@ export const Navbar: React.FC = () => {
                   isActive('/history') ? 'text-brand border-b-2 border-brand py-5' : 'text-slate-500 dark:text-slate-400'
                 }`}
               >
-                History
+                {t('navbar.history')}
               </Link>
               <Link
                 to="/skills"
@@ -105,9 +114,9 @@ export const Navbar: React.FC = () => {
                   isActive('/skills') ? 'text-brand border-b-2 border-brand py-5' : 'text-slate-500 dark:text-slate-400'
                 }`}
               >
-                Skill Tracker
+                {t('navbar.skill_tracker')}
               </Link>
-              <span className="text-sm font-medium text-slate-400 dark:text-slate-500 cursor-not-allowed">Resources</span>
+              <span className="text-sm font-medium text-slate-400 dark:text-slate-500 cursor-not-allowed">{t('navbar.resources')}</span>
             </div>
           </div>
 
@@ -115,14 +124,54 @@ export const Navbar: React.FC = () => {
           {user && (
             <div className="hidden md:flex items-center gap-4">
               {/* API Calls Usage Indicator */}
-              <div className="group relative flex items-center gap-1.5 rounded-full border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/30 px-3 py-1.5 text-xs font-semibold text-slate-650 dark:text-slate-350 transition-all cursor-help hover:bg-slate-100 dark:hover:bg-slate-850/50">
+              <div className="group relative flex items-center gap-1.5 rounded-full border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/30 px-3 py-1.5 text-xs font-semibold text-slate-655 dark:text-slate-350 transition-all cursor-help hover:bg-slate-100 dark:hover:bg-slate-850/50">
                 <Sparkles className="h-3.5 w-3.5 text-brand shrink-0" />
-                <span>{apiCallsToday}/50 AI calls today</span>
+                <span>{t('navbar.api_calls_today', { count: apiCallsToday })}</span>
                 
                 {/* Tooltip */}
                 <div className="absolute top-full right-0 mt-2 hidden group-hover:block w-64 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-3.5 shadow-xl text-[11px] font-medium leading-relaxed text-slate-500 dark:text-slate-400 z-50 text-left">
-                  This daily limit of 50 AI calls exists to keep Mock Interview evaluation sustainable for everyone. Resets daily at midnight.
+                  {t('navbar.api_calls_tooltip')}
                 </div>
+              </div>
+
+              {/* Language Selector Dropdown */}
+              <div className="relative">
+                <button
+                  onClick={() => setLangDropdownOpen(!langDropdownOpen)}
+                  className="flex items-center gap-1 rounded-full p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-600 dark:hover:text-slate-300 transition-colors focus-visible:ring-2 focus-visible:ring-brand focus:outline-none"
+                  aria-label={t('navbar.select_language')}
+                  title={t('navbar.select_language')}
+                >
+                  <Languages className="h-5 w-5" aria-hidden="true" />
+                  <span className="text-[10px] font-bold uppercase">{i18n.language}</span>
+                </button>
+                {langDropdownOpen && (
+                  <>
+                    <div className="fixed inset-0 z-30" onClick={() => setLangDropdownOpen(false)} />
+                    <div className="absolute right-0 mt-2 w-36 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 py-1 shadow-lg ring-1 ring-black/5 z-40">
+                      <button
+                        onClick={() => changeLanguage('en')}
+                        className={`flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-semibold transition-colors cursor-pointer ${
+                          i18n.language === 'en'
+                            ? 'text-brand bg-slate-50 dark:bg-slate-900'
+                            : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-900'
+                        }`}
+                      >
+                        <span>🇺🇸</span> English
+                      </button>
+                      <button
+                        onClick={() => changeLanguage('hi')}
+                        className={`flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-semibold transition-colors cursor-pointer ${
+                          i18n.language === 'hi'
+                            ? 'text-brand bg-slate-50 dark:bg-slate-900'
+                            : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-900'
+                        }`}
+                      >
+                        <span>🇮🇳</span> हिन्दी
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Theme Toggle */}
@@ -187,7 +236,7 @@ export const Navbar: React.FC = () => {
                         className="flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-900"
                       >
                         <User className="h-4 w-4" />
-                        Edit Profile
+                        {t('navbar.edit_profile')}
                       </Link>
                       <button
                         onClick={() => {
@@ -197,7 +246,7 @@ export const Navbar: React.FC = () => {
                         className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20"
                       >
                         <LogOut className="h-4 w-4" />
-                        Log out
+                        {t('navbar.log_out')}
                       </button>
                     </div>
                   </>
@@ -230,7 +279,7 @@ export const Navbar: React.FC = () => {
               isActive('/') ? 'bg-brand/10 text-brand' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
             }`}
           >
-            Dashboard
+            {t('navbar.dashboard')}
           </Link>
           <Link
             to="/leaderboard"
@@ -239,7 +288,7 @@ export const Navbar: React.FC = () => {
               isActive('/leaderboard') ? 'bg-brand/10 text-brand' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
             }`}
           >
-            Leaderboard
+            {t('navbar.leaderboard')}
           </Link>
           <Link
             to="/history"
@@ -248,7 +297,7 @@ export const Navbar: React.FC = () => {
               isActive('/history') ? 'bg-brand/10 text-brand' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
             }`}
           >
-            History
+            {t('navbar.history')}
           </Link>
           <Link
             to="/skills"
@@ -257,7 +306,7 @@ export const Navbar: React.FC = () => {
               isActive('/skills') ? 'bg-brand/10 text-brand' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
             }`}
           >
-            Skill Tracker
+            {t('navbar.skill_tracker')}
           </Link>
           <div className="border-t border-slate-100 dark:border-slate-800 my-2 pt-2">
             <div className="flex items-center gap-3 px-3 py-2">
@@ -271,16 +320,53 @@ export const Navbar: React.FC = () => {
                 <p className="text-xs text-slate-500 dark:text-slate-400">{user.email}</p>
               </div>
             </div>
+
             {/* Mobile API Usage Display */}
             <div className="flex flex-col gap-1 px-3 py-2 border-b border-slate-100 dark:border-slate-800 mb-2 pb-2">
               <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-650 dark:text-slate-300">
                 <Sparkles className="h-3.5 w-3.5 text-brand shrink-0" />
-                <span>{apiCallsToday}/50 AI calls today</span>
+                <span>{t('navbar.api_calls_today', { count: apiCallsToday })}</span>
               </div>
-              <p className="text-[10px] text-slate-405 dark:text-slate-500 leading-normal">
-                This limit keeps InterviewMate sustainable for everyone. Resets daily at midnight.
+              <p className="text-[10px] text-slate-450 dark:text-slate-500 leading-normal">
+                {t('navbar.api_calls_tooltip')}
               </p>
             </div>
+
+            {/* Mobile Language Switcher */}
+            <div className="flex flex-col gap-1 px-3 py-2 border-b border-slate-100 dark:border-slate-800 mb-2 pb-2">
+              <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-1">
+                {t('navbar.select_language')}
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    changeLanguage('en');
+                    setMobileMenuOpen(false);
+                  }}
+                  className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg border py-2 text-xs font-semibold transition-all cursor-pointer ${
+                    i18n.language === 'en'
+                      ? 'bg-brand/10 text-brand border-brand'
+                      : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-350 hover:bg-slate-50 dark:hover:bg-slate-850'
+                  }`}
+                >
+                  🇺🇸 English
+                </button>
+                <button
+                  onClick={() => {
+                    changeLanguage('hi');
+                    setMobileMenuOpen(false);
+                  }}
+                  className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg border py-2 text-xs font-semibold transition-all cursor-pointer ${
+                    i18n.language === 'hi'
+                      ? 'bg-brand/10 text-brand border-brand'
+                      : 'border-slate-200 dark:border-slate-800 text-slate-650 dark:text-slate-350 hover:bg-slate-50 dark:hover:bg-slate-850'
+                  }`}
+                >
+                  🇮🇳 हिन्दी
+                </button>
+              </div>
+            </div>
+
             <button
               onClick={() => {
                 setMobileMenuOpen(false);
@@ -297,7 +383,7 @@ export const Navbar: React.FC = () => {
               className="flex items-center gap-2 rounded-md px-3 py-2 text-base font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
             >
               <Settings className="h-5 w-5" />
-              Settings
+              {t('navbar.edit_profile')}
             </Link>
             <button
               onClick={() => {
@@ -307,7 +393,7 @@ export const Navbar: React.FC = () => {
               className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-base font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 text-left"
             >
               <LogOut className="h-5 w-5" />
-              Log out
+              {t('navbar.log_out')}
             </button>
           </div>
         </div>
