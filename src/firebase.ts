@@ -1082,5 +1082,114 @@ export const submitUserFeedback = async (feedback: {
   }
 };
 
+// ----------------------------------------------------
+// API USAGE & RATE LIMITING APIs
+// ----------------------------------------------------
+
+export const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+  const event = new CustomEvent('im-show-toast', { detail: { message, type } });
+  window.dispatchEvent(event);
+};
+
+export const checkApiUsage = async (userId: string): Promise<{ claudeCallsToday: number }> => {
+  if (!MOCK_MODE) {
+    const fn = httpsCallable(firebaseFunctions, 'checkApiUsage');
+    const result = await fn();
+    return result.data as { claudeCallsToday: number };
+  } else {
+    // Mock Mode
+    const apiUsage = getLocalData('im_api_usage', {});
+    const todayStr = new Date().toISOString().split('T')[0];
+    
+    let userUsage = apiUsage[userId];
+    if (!userUsage) {
+      userUsage = {
+        claudeCallsToday: 0,
+        lastResetDate: todayStr
+      };
+    } else {
+      let resetDateStr = '';
+      if (userUsage.lastResetDate) {
+        resetDateStr = userUsage.lastResetDate.split('T')[0];
+      }
+      if (resetDateStr !== todayStr) {
+        userUsage.claudeCallsToday = 0;
+        userUsage.lastResetDate = todayStr;
+      }
+    }
+    
+    apiUsage[userId] = userUsage;
+    setLocalData('im_api_usage', apiUsage);
+    
+    if (userUsage.claudeCallsToday >= 50) {
+      throw new Error("Daily AI usage limit reached, resets at midnight");
+    }
+    
+    return { claudeCallsToday: userUsage.claudeCallsToday };
+  }
+};
+
+export const incrementApiUsage = async (userId: string): Promise<void> => {
+  if (!MOCK_MODE) {
+    const fn = httpsCallable(firebaseFunctions, 'incrementApiUsage');
+    await fn();
+  } else {
+    // Mock Mode
+    const apiUsage = getLocalData('im_api_usage', {});
+    const todayStr = new Date().toISOString().split('T')[0];
+    
+    let userUsage = apiUsage[userId];
+    if (!userUsage) {
+      userUsage = {
+        claudeCallsToday: 1,
+        lastResetDate: todayStr
+      };
+    } else {
+      let resetDateStr = '';
+      if (userUsage.lastResetDate) {
+        resetDateStr = userUsage.lastResetDate.split('T')[0];
+      }
+      if (resetDateStr !== todayStr) {
+        userUsage.claudeCallsToday = 1;
+      } else {
+        userUsage.claudeCallsToday += 1;
+      }
+      userUsage.lastResetDate = todayStr;
+    }
+    
+    apiUsage[userId] = userUsage;
+    setLocalData('im_api_usage', apiUsage);
+    window.dispatchEvent(new Event('storage'));
+  }
+};
+
+export const subscribeToApiUsage = (userId: string, callback: (data: any) => void) => {
+  if (!MOCK_MODE) {
+    const docRef = doc(firestoreDb, 'api_usage', userId);
+    return onSnapshot(docRef, (docSnap) => {
+      if (docSnap.exists()) {
+        callback(docSnap.data());
+      } else {
+        callback(null);
+      }
+    });
+  } else {
+    const checkUsage = () => {
+      const apiUsage = getLocalData('im_api_usage', {});
+      callback(apiUsage[userId] || null);
+    };
+
+    checkUsage();
+    window.addEventListener('storage', checkUsage);
+    const intervalId = setInterval(checkUsage, 1000);
+
+    return () => {
+      window.removeEventListener('storage', checkUsage);
+      clearInterval(intervalId);
+    };
+  }
+};
+
+
 
 

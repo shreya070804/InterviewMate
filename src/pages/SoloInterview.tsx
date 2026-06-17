@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { saveSoloSession, saveFeedback } from '../firebase';
+import { saveSoloSession, saveFeedback, checkApiUsage, incrementApiUsage, showToast } from '../firebase';
 import { Layout } from '../components/Layout';
 import Editor from '@monaco-editor/react';
 import { 
@@ -90,6 +90,18 @@ export const SoloInterview: React.FC = () => {
   }, [language]);
 
   const handleStartSession = async () => {
+    const apiKey = localStorage.getItem('im_claude_key') || import.meta.env.VITE_ANTHROPIC_API_KEY || '';
+    if (apiKey) {
+      try {
+        if (user) {
+          await checkApiUsage(user.uid);
+        }
+      } catch (err: any) {
+        showToast(err.message || "Daily AI usage limit reached, resets at midnight", "error");
+        return;
+      }
+    }
+
     setActiveDifficulty(difficulty);
     setDifficultyTrend('initial');
     setMode('interview');
@@ -153,6 +165,10 @@ export const SoloInterview: React.FC = () => {
 
     if (apiKey) {
       try {
+        if (user) {
+          await checkApiUsage(user.uid);
+        }
+        
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 4000);
 
@@ -184,6 +200,11 @@ export const SoloInterview: React.FC = () => {
 
         if (evalResponse.ok) {
           const evalData = await evalResponse.json();
+          
+          if (user) {
+            await incrementApiUsage(user.uid);
+          }
+
           const evalText = evalData.content?.[0]?.text?.trim().toLowerCase() || 'same';
           console.log('Adaptive Difficulty response:', evalText);
           if (evalText.includes('easier')) signal = 'easier';
@@ -224,6 +245,16 @@ export const SoloInterview: React.FC = () => {
     
     if (apiKey) {
       try {
+        if (user) {
+          await checkApiUsage(user.uid);
+        }
+      } catch (err: any) {
+        showToast(err.message || "Daily AI usage limit reached, resets at midnight", "error");
+        setIsStreaming(false);
+        simulateChatStreaming();
+        return;
+      }
+      try {
         const response = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
           headers: {
@@ -243,6 +274,10 @@ export const SoloInterview: React.FC = () => {
 
         if (!response.ok) {
           throw new Error('Streaming failed');
+        }
+
+        if (user) {
+          await incrementApiUsage(user.uid);
         }
 
         const reader = response.body?.getReader();

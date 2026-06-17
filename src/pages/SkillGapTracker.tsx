@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Layout } from '../components/Layout';
-import { getUserFeedbackList } from '../firebase';
+import { getUserFeedbackList, checkApiUsage, incrementApiUsage, showToast } from '../firebase';
 import { WeakAreaCard } from '../components/WeakAreaCard';
 import type { Feedback } from '../types';
 import { Brain, Sparkles, RefreshCw, AlertCircle } from 'lucide-react';
@@ -80,6 +80,9 @@ export const SkillGapTracker: React.FC = () => {
 
       if (apiKey) {
         try {
+          if (user) {
+            await checkApiUsage(user.uid);
+          }
           const userPrompt = `Based on these category-wise average scores over the last ${n} sessions: ${JSON.stringify(scoresByCategory)}, identify the user's top 2 weakest areas and suggest 3 specific topics to study for each. Return JSON with weak_areas (array of objects with category, avg_score, study_topics array).`;
 
           const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -100,6 +103,11 @@ export const SkillGapTracker: React.FC = () => {
 
           if (response.ok) {
             const responseData = await response.json();
+            
+            if (user) {
+              await incrementApiUsage(user.uid);
+            }
+
             const jsonText = responseData.content[0].text;
             const parsed = JSON.parse(jsonText.replace(/```json/g, '').replace(/```/g, '').trim());
 
@@ -113,8 +121,11 @@ export const SkillGapTracker: React.FC = () => {
               return;
             }
           }
-        } catch (err) {
+        } catch (err: any) {
           console.warn('Claude API failed to fetch skill gaps, using local analysis fallback:', err);
+          if (err.message && err.message.includes('limit reached')) {
+            showToast(err.message, 'error');
+          }
         }
       }
 

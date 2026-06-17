@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onSessionDelete = exports.onSessionUpdate = exports.sendSessionReminders = exports.calculateWeeklyLeaderboard = exports.parseResume = exports.matchmaker = void 0;
+exports.incrementApiUsage = exports.checkApiUsage = exports.onSessionDelete = exports.onSessionUpdate = exports.sendSessionReminders = exports.calculateWeeklyLeaderboard = exports.parseResume = exports.matchmaker = void 0;
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const resend_1 = require("resend");
@@ -462,5 +462,94 @@ exports.onSessionDelete = functions.firestore
         }
     }
     return null;
+});
+exports.checkApiUsage = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'User must be logged in.');
+    }
+    const uid = context.auth.uid;
+    const db = admin.firestore();
+    const docRef = db.collection('api_usage').doc(uid);
+    const doc = await docRef.get();
+    const todayStr = new Date().toISOString().split('T')[0];
+    let claudeCallsToday = 0;
+    if (doc.exists) {
+        const docData = doc.data();
+        claudeCallsToday = docData?.claudeCallsToday || 0;
+        const docResetDate = docData?.lastResetDate;
+        let resetDateStr = '';
+        if (docResetDate) {
+            if (typeof docResetDate.toDate === 'function') {
+                resetDateStr = docResetDate.toDate().toISOString().split('T')[0];
+            }
+            else if (docResetDate instanceof Date) {
+                resetDateStr = docResetDate.toISOString().split('T')[0];
+            }
+            else if (typeof docResetDate === 'string') {
+                resetDateStr = docResetDate.split('T')[0];
+            }
+        }
+        if (resetDateStr !== todayStr) {
+            claudeCallsToday = 0;
+            await docRef.set({
+                claudeCallsToday: 0,
+                lastResetDate: admin.firestore.Timestamp.fromDate(new Date(todayStr))
+            }, { merge: true });
+        }
+    }
+    else {
+        await docRef.set({
+            claudeCallsToday: 0,
+            lastResetDate: admin.firestore.Timestamp.fromDate(new Date(todayStr))
+        });
+    }
+    if (claudeCallsToday >= 50) {
+        throw new functions.https.HttpsError('resource-exhausted', 'Daily AI usage limit reached, resets at midnight');
+    }
+    return { claudeCallsToday };
+});
+exports.incrementApiUsage = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'User must be logged in.');
+    }
+    const uid = context.auth.uid;
+    const db = admin.firestore();
+    const docRef = db.collection('api_usage').doc(uid);
+    const todayStr = new Date().toISOString().split('T')[0];
+    await db.runTransaction(async (transaction) => {
+        const doc = await transaction.get(docRef);
+        let claudeCallsToday = 0;
+        if (doc.exists) {
+            const docData = doc.data();
+            claudeCallsToday = docData?.claudeCallsToday || 0;
+            const docResetDate = docData?.lastResetDate;
+            let resetDateStr = '';
+            if (docResetDate) {
+                if (typeof docResetDate.toDate === 'function') {
+                    resetDateStr = docResetDate.toDate().toISOString().split('T')[0];
+                }
+                else if (docResetDate instanceof Date) {
+                    resetDateStr = docResetDate.toISOString().split('T')[0];
+                }
+                else if (typeof docResetDate === 'string') {
+                    resetDateStr = docResetDate.split('T')[0];
+                }
+            }
+            if (resetDateStr !== todayStr) {
+                claudeCallsToday = 1;
+            }
+            else {
+                claudeCallsToday += 1;
+            }
+        }
+        else {
+            claudeCallsToday = 1;
+        }
+        transaction.set(docRef, {
+            claudeCallsToday,
+            lastResetDate: admin.firestore.Timestamp.fromDate(new Date(todayStr))
+        }, { merge: true });
+    });
+    return { success: true };
 });
 //# sourceMappingURL=index.js.map

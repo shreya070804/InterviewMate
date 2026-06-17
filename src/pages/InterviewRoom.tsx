@@ -10,7 +10,10 @@ import {
   getUserProfile,
   MOCK_MODE,
   sendChatMessage,
-  subscribeToChatMessages
+  subscribeToChatMessages,
+  checkApiUsage,
+  incrementApiUsage,
+  showToast
 } from '../firebase';
 import type { Session, Question, UserProfile } from '../types';
 import Editor from '@monaco-editor/react';
@@ -797,6 +800,15 @@ export const InterviewRoom: React.FC = () => {
 
     if (apiKey) {
       try {
+        if (user) {
+          await checkApiUsage(user.uid);
+        }
+      } catch (err: any) {
+        showToast(err.message || "Daily AI usage limit reached, resets at midnight", "error");
+        setIsAnalyzingVoice(false);
+        return;
+      }
+      try {
         const response = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
           headers: {
@@ -820,6 +832,11 @@ export const InterviewRoom: React.FC = () => {
 
         if (response.ok) {
           const data = await response.json();
+          
+          if (user) {
+            await incrementApiUsage(user.uid);
+          }
+
           const jsonText = data.content[0].text;
           const cleanJson = jsonText.replace(/```json/g, '').replace(/```/g, '').trim();
           const parsed = JSON.parse(cleanJson);
@@ -941,6 +958,15 @@ export const InterviewRoom: React.FC = () => {
 
     if (apiKey) {
       try {
+        if (user) {
+          await checkApiUsage(user.uid);
+        }
+      } catch (err: any) {
+        showToast(err.message || "Daily AI usage limit reached, resets at midnight", "error");
+        setIsGenerating(false);
+        return;
+      }
+      try {
         const response = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
           headers: {
@@ -967,6 +993,11 @@ export const InterviewRoom: React.FC = () => {
         }
 
         const responseData = await response.json();
+        
+        if (user) {
+          await incrementApiUsage(user.uid);
+        }
+
         const jsonText = responseData.content[0].text;
         const cleanJson = jsonText.replace(/```json/g, '').replace(/```/g, '').trim();
         const parsed = JSON.parse(cleanJson);

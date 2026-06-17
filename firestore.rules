@@ -58,5 +58,11 @@ service cloud.firestore {
         request.auth.uid == resource.data.userId
       );
     }
+
+    // API usage tracking rules: read-only for current authenticated user, write is server-only
+    match /api_usage/{userId} {
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      allow write: if false;
+    }
   }
 }

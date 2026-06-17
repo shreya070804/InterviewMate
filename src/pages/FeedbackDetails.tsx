@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getFeedback, saveFeedback, getQuestions } from '../firebase';
+import { getFeedback, saveFeedback, getQuestions, checkApiUsage, incrementApiUsage, showToast } from '../firebase';
+import { useAuth } from '../context/AuthContext';
 import type { Feedback } from '../types';
 import { Layout } from '../components/Layout';
 import { 
@@ -21,6 +22,7 @@ const ANTHROPIC_API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY || '';
 export const FeedbackDetails: React.FC = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [loading, setLoading] = useState(true);
@@ -165,6 +167,18 @@ export const FeedbackDetails: React.FC = () => {
       const keyToUse = apiKeyInput || localStorage.getItem('im_claude_key') || '';
 
       if (keyToUse) {
+        // Check rate limit first
+        try {
+          if (user) {
+            await checkApiUsage(user.uid);
+          }
+        } catch (err: any) {
+          showToast(err.message || "Daily AI usage limit reached, resets at midnight", "error");
+          setGeneratingAI(false);
+          setLoading(false);
+          return;
+        }
+
         // CALL REAL ANTHROPIC CLAUDE API
         // Prompt formatted for JSON output
         const userPrompt = `You are a senior software engineer reviewing a mock interview. The question was: ${questionText}. The candidate's code was: ${codeString}. Give structured feedback as JSON with these fields: correctness (score 1-10), efficiency (score 1-10), communication (score 1-10), strengths (array of 2-3 strings), improvements (array of 2-3 strings), overall_summary (2 sentences).`;
@@ -192,6 +206,11 @@ export const FeedbackDetails: React.FC = () => {
           }
 
           const responseData = await response.json();
+          
+          if (user) {
+            await incrementApiUsage(user.uid);
+          }
+
           const jsonText = responseData.content[0].text;
           const parsed = JSON.parse(jsonText.replace(/```json/g, '').replace(/```/g, '').trim());
 
@@ -264,6 +283,16 @@ export const FeedbackDetails: React.FC = () => {
     const codeSnippet = currentFeedback.codeSnippet || '// No code written';
 
     if (keyToUse) {
+      // Check rate limit first
+      try {
+        if (user) {
+          await checkApiUsage(user.uid);
+        }
+      } catch (err: any) {
+        showToast(err.message || "Daily AI usage limit reached, resets at midnight", "error");
+        return;
+      }
+
       try {
         const userPrompt = `Based on this mock interview session — Question: ${questionText}, Code submitted: ${codeSnippet}, Scores: correctness ${currentFeedback.scores.correctness}/10, efficiency ${currentFeedback.scores.efficiency}/10, communication ${currentFeedback.scores.communication}/10 — generate a concise session summary as JSON with these fields: what_was_attempted (1 sentence), what_went_well (1 sentence), biggest_gap (1 sentence), top_study_topic (e.g. 'Binary Trees'), estimated_readiness (percentage 0-100). Return only valid JSON.`;
 
@@ -285,6 +314,11 @@ export const FeedbackDetails: React.FC = () => {
 
         if (response.ok) {
           const responseData = await response.json();
+          
+          if (user) {
+            await incrementApiUsage(user.uid);
+          }
+
           const jsonText = responseData.content[0].text;
           const parsed = JSON.parse(jsonText.replace(/```json/g, '').replace(/```/g, '').trim());
 

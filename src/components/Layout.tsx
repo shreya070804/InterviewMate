@@ -9,7 +9,8 @@ import {
   Lightbulb, 
   X, 
   Send, 
-  CheckCircle 
+  CheckCircle,
+  AlertCircle
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -24,6 +25,22 @@ export const Layout: React.FC<LayoutProps> = ({ children, showNavbar = true }) =
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('Thanks, got it!');
+  const [toastType, setToastType] = useState<'success' | 'error'>('success');
+
+  useEffect(() => {
+    const handleShowToast = (e: Event) => {
+      const customEvent = e as CustomEvent<{ message: string; type?: 'success' | 'error' }>;
+      setToastMessage(customEvent.detail.message);
+      setToastType(customEvent.detail.type || 'success');
+      setShowToast(true);
+    };
+
+    window.addEventListener('im-show-toast', handleShowToast);
+    return () => {
+      window.removeEventListener('im-show-toast', handleShowToast);
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,6 +58,8 @@ export const Layout: React.FC<LayoutProps> = ({ children, showNavbar = true }) =
 
       setMessage('');
       setIsOpen(false);
+      setToastMessage('Thanks, got it!');
+      setToastType('success');
       setShowToast(true);
     } catch (err) {
       console.error('Failed to submit feedback:', err);
@@ -170,8 +189,12 @@ export const Layout: React.FC<LayoutProps> = ({ children, showNavbar = true }) =
               exit={{ opacity: 0, y: 20, scale: 0.95 }}
               className="fixed bottom-20 right-6 bg-slate-950 dark:bg-white text-white dark:text-slate-950 px-4 py-3 rounded-2xl shadow-xl z-1000 text-xs font-bold flex items-center gap-2 border border-slate-850 dark:border-slate-100"
             >
-              <CheckCircle className="h-4.5 w-4.5 text-emerald-400 dark:text-emerald-550 shrink-0" />
-              <span>Thanks, got it!</span>
+              {toastType === 'error' ? (
+                <AlertCircle className="h-4.5 w-4.5 text-red-500 dark:text-red-650 shrink-0" />
+              ) : (
+                <CheckCircle className="h-4.5 w-4.5 text-emerald-400 dark:text-emerald-550 shrink-0" />
+              )}
+              <span>{toastMessage}</span>
             </motion.div>
           )}
         </AnimatePresence>
