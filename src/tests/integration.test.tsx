@@ -12,10 +12,12 @@ vi.mock('react-router-dom', () => ({
 }));
 
 // Mock useAuth context to return a logged-in user
+const mockUser = { uid: 'emulator-test-user-id', displayName: 'Emulator User' };
+const mockProfile = { onboarded: true, displayName: 'Emulator User', hasCompletedOnboarding: false };
 vi.mock('../context/AuthContext', () => ({
   useAuth: () => ({
-    user: { uid: 'emulator-test-user-id', displayName: 'Emulator User' },
-    profile: { onboarded: true, displayName: 'Emulator User', hasCompletedOnboarding: false },
+    user: mockUser,
+    profile: mockProfile,
     updateProfile: vi.fn().mockResolvedValue({}),
   }),
 }));

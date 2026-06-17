@@ -11,11 +11,13 @@ vi.mock('react-router-dom', () => ({
 }));
 
 // Mock useAuth context
+const mockUser = { uid: 'test-user-id', displayName: 'Test User' };
+const mockProfile = { onboarded: true, displayName: 'Test User', hasCompletedOnboarding: false };
 const mockUpdateProfile = vi.fn().mockResolvedValue({});
 vi.mock('../context/AuthContext', () => ({
   useAuth: () => ({
-    user: { uid: 'test-user-id', displayName: 'Test User' },
-    profile: { onboarded: true, displayName: 'Test User', hasCompletedOnboarding: false },
+    user: mockUser,
+    profile: mockProfile,
     updateProfile: mockUpdateProfile,
   }),
 }));
