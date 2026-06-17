@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { getFeedback, saveFeedback, getQuestions, checkApiUsage, incrementApiUsage, showToast } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import type { Feedback } from '../types';
+import { parseClaudeResponse } from '../utils/claudeParser';
 import { Layout } from '../components/Layout';
 import { 
   CheckCircle2, 
@@ -212,18 +213,18 @@ export const FeedbackDetails: React.FC = () => {
           }
 
           const jsonText = responseData.content[0].text;
-          const parsed = JSON.parse(jsonText.replace(/```json/g, '').replace(/```/g, '').trim());
+          const parsed = parseClaudeResponse(jsonText);
 
           const finalized: Feedback = {
             ...currentFeedback,
             scores: {
-              correctness: parsed.correctness || 7,
-              efficiency: parsed.efficiency || 7,
-              communication: parsed.communication || 7,
+              correctness: parsed.correctness,
+              efficiency: parsed.efficiency,
+              communication: parsed.communication,
             },
-            strengths: parsed.strengths || [],
-            improvements: parsed.improvements || [],
-            summary: parsed.overall_summary || '',
+            strengths: parsed.strengths,
+            improvements: parsed.improvements,
+            summary: parsed.overall_summary,
           };
 
           await saveFeedback(finalized);

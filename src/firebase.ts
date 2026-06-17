@@ -23,7 +23,8 @@ import {
   serverTimestamp,
   deleteDoc,
   addDoc,
-  orderBy
+  orderBy,
+  connectFirestoreEmulator
 } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import type { UserProfile, Session, Question, Feedback, QuestionPack } from './types';
@@ -37,7 +38,8 @@ const storageBucket = import.meta.env.VITE_FIREBASE_STORAGE_BUCKET;
 const messagingSenderId = import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID;
 const appId = import.meta.env.VITE_FIREBASE_APP_ID;
 
-const isFirebaseConfigured = !!(apiKey && authDomain && projectId);
+const isTestEnv = typeof window !== 'undefined' && !!((import.meta.env as any)?.VITEST);
+const isFirebaseConfigured = !!(apiKey && authDomain && projectId) || isTestEnv;
 
 let firebaseApp: any = null;
 let firebaseAuth: any = null;
@@ -46,7 +48,14 @@ let firebaseFunctions: any = null;
 
 if (isFirebaseConfigured) {
   try {
-    firebaseApp = getApps().length === 0 ? initializeApp({
+    firebaseApp = getApps().length === 0 ? initializeApp(isTestEnv ? {
+      apiKey: "aiza-dummy-api-key-for-emulator-testing",
+      authDomain: "demo-interviewmate.firebaseapp.com",
+      projectId: "demo-interviewmate",
+      storageBucket: "demo-interviewmate.appspot.com",
+      messagingSenderId: "1234567890",
+      appId: "1:1234567890:web:1234567890"
+    } : {
       apiKey,
       authDomain,
       projectId,
@@ -57,7 +66,13 @@ if (isFirebaseConfigured) {
     firebaseAuth = getAuth(firebaseApp);
     firestoreDb = getFirestore(firebaseApp);
     firebaseFunctions = getFunctions(firebaseApp);
-    console.log("Firebase initialized successfully in Real Mode.");
+    
+    if (isTestEnv) {
+      connectFirestoreEmulator(firestoreDb, '127.0.0.1', 8080);
+      console.log("Connected to Firestore emulator");
+    } else {
+      console.log("Firebase initialized successfully in Real Mode.");
+    }
   } catch (error) {
     console.error("Error initializing Firebase, falling back to Mock Mode:", error);
   }

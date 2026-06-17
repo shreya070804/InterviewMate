@@ -222,6 +222,13 @@ export const Dashboard: React.FC = () => {
       return;
     }
 
+    const selectedDateTime = new Date(`${modalDate}T${modalTime}`);
+    const now = new Date();
+    if (selectedDateTime < now) {
+      alert("Session date and time cannot be in the past");
+      return;
+    }
+
     const topicDetail = 
       modalTopic === 'DSA' ? 'Data Structures & Algorithms' : 
       modalTopic === 'System Design' ? 'System Design: Architecture' : 
@@ -1103,8 +1110,9 @@ export const Dashboard: React.FC = () => {
               {/* Date & Time Input */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Date</label>
+                  <label htmlFor="modal-date" className="text-xs font-semibold uppercase tracking-wider text-slate-500">Date</label>
                   <input
+                    id="modal-date"
                     type="date"
                     required
                     value={modalDate}
@@ -1113,8 +1121,9 @@ export const Dashboard: React.FC = () => {
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Time</label>
+                  <label htmlFor="modal-time" className="text-xs font-semibold uppercase tracking-wider text-slate-500">Time</label>
                   <input
+                    id="modal-time"
                     type="time"
                     required
                     value={modalTime}
