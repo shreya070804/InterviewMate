@@ -18,7 +18,6 @@ import {
   showToast
 } from '../firebase';
 import type { Session, Question, UserProfile } from '../types';
-import Editor from '@monaco-editor/react';
 import AgoraRTC from 'agora-rtc-sdk-ng';
 import type { IAgoraRTCClient, ICameraVideoTrack, IMicrophoneAudioTrack } from 'agora-rtc-sdk-ng';
 import { 
@@ -44,8 +43,12 @@ import {
   Sparkles,
   MessageSquare
 } from 'lucide-react';
-import { Excalidraw } from '@excalidraw/excalidraw';
 import "@excalidraw/excalidraw/index.css";
+
+const Editor = React.lazy(() => import('@monaco-editor/react'));
+const Excalidraw = React.lazy(() =>
+  import('@excalidraw/excalidraw').then((module) => ({ default: module.Excalidraw }))
+);
 
 const AGORA_APP_ID = import.meta.env.VITE_AGORA_APP_ID || '';
 
@@ -1687,24 +1690,31 @@ export const InterviewRoom: React.FC = () => {
 
                 {/* Monaco Editor Container */}
                 <div className="flex-1 min-h-[300px]">
-                  <Editor
-                    height="100%"
-                    language={language === 'cpp' ? 'cpp' : language}
-                    theme="vs-dark"
-                    value={code}
-                    onChange={handleEditorChange}
-                    onMount={handleEditorDidMount}
-                    options={{
-                      fontSize: 13,
-                      minimap: { enabled: false },
-                      lineNumbers: 'on',
-                      roundedSelection: true,
-                      scrollBeyondLastLine: false,
-                      readOnly: false,
-                      cursorBlinking: 'smooth',
-                      fontFamily: 'Consolas, Monaco, monospace'
-                    }}
-                  />
+                  <React.Suspense fallback={
+                    <div className="w-full h-full min-h-[300px] bg-[#1e1e1e] flex flex-col items-center justify-center text-slate-400 gap-3 font-mono text-sm border border-slate-800 rounded-md">
+                      <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand border-t-transparent"></div>
+                      <span>Loading code editor...</span>
+                    </div>
+                  }>
+                    <Editor
+                      height="100%"
+                      language={language === 'cpp' ? 'cpp' : language}
+                      theme="vs-dark"
+                      value={code}
+                      onChange={handleEditorChange}
+                      onMount={handleEditorDidMount}
+                      options={{
+                        fontSize: 13,
+                        minimap: { enabled: false },
+                        lineNumbers: 'on',
+                        roundedSelection: true,
+                        scrollBeyondLastLine: false,
+                        readOnly: false,
+                        cursorBlinking: 'smooth',
+                        fontFamily: 'Consolas, Monaco, monospace'
+                      }}
+                    />
+                  </React.Suspense>
                 </div>
 
                 {/* Synced Terminal Console */}
@@ -1766,12 +1776,19 @@ export const InterviewRoom: React.FC = () => {
               </>
             )
           ) : (
-            <aside role="complementary" aria-label="Whiteboard Canvas" className="flex-1 relative overflow-hidden bg-slate-900 border-t border-slate-800">
-              <Excalidraw
-                excalidrawAPI={(api) => { excalidrawRef.current = api; }}
-                onChange={handleWhiteboardChange}
-                theme="dark"
-              />
+            <aside role="complementary" aria-label="Whiteboard Canvas" className="flex-1 relative overflow-hidden bg-slate-900 border-t border-slate-800 flex flex-col justify-stretch">
+              <React.Suspense fallback={
+                <div className="w-full h-full min-h-[400px] bg-slate-900 flex flex-col items-center justify-center text-slate-400 gap-3 font-sans text-sm">
+                  <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand border-t-transparent"></div>
+                  <span>Loading interactive whiteboard...</span>
+                </div>
+              }>
+                <Excalidraw
+                  excalidrawAPI={(api) => { excalidrawRef.current = api; }}
+                  onChange={handleWhiteboardChange}
+                  theme="dark"
+                />
+              </React.Suspense>
             </aside>
           )}
         </div>

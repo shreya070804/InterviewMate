@@ -4,7 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import { saveSoloSession, saveFeedback, checkApiUsage, incrementApiUsage, showToast } from '../firebase';
 import * as Sentry from '@sentry/react';
 import { Layout } from '../components/Layout';
-import Editor from '@monaco-editor/react';
+
+const Editor = React.lazy(() => import('@monaco-editor/react'));
 import { 
   Play, 
   Send, 
@@ -825,23 +826,30 @@ export const SoloInterview: React.FC = () => {
 
           {/* Monaco container */}
           <div className="flex-1 min-h-[300px]">
-            <Editor
-              height="100%"
-              language={language === 'cpp' ? 'cpp' : language}
-              theme="vs-dark"
-              value={code}
-              onChange={(val) => setCode(val || '')}
-              options={{
-                fontSize: 13,
-                minimap: { enabled: false },
-                lineNumbers: 'on',
-                roundedSelection: true,
-                scrollBeyondLastLine: false,
-                readOnly: false,
-                cursorBlinking: 'smooth',
-                fontFamily: 'Consolas, Monaco, monospace'
-              }}
-            />
+            <React.Suspense fallback={
+              <div className="w-full h-full min-h-[300px] bg-[#1e1e1e] flex flex-col items-center justify-center text-slate-400 gap-3 font-mono text-sm border border-slate-800 rounded-md">
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand border-t-transparent"></div>
+                <span>Loading code editor...</span>
+              </div>
+            }>
+              <Editor
+                height="100%"
+                language={language === 'cpp' ? 'cpp' : language}
+                theme="vs-dark"
+                value={code}
+                onChange={(val) => setCode(val || '')}
+                options={{
+                  fontSize: 13,
+                  minimap: { enabled: false },
+                  lineNumbers: 'on',
+                  roundedSelection: true,
+                  scrollBeyondLastLine: false,
+                  readOnly: false,
+                  cursorBlinking: 'smooth',
+                  fontFamily: 'Consolas, Monaco, monospace'
+                }}
+              />
+            </React.Suspense>
           </div>
 
           {/* Synced Terminal Console */}

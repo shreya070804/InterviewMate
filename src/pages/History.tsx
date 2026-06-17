@@ -2,46 +2,48 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Layout } from '../components/Layout';
-import { getUserFeedbackList } from '../firebase';
+import { getUserFeedbackPaginated } from '../firebase';
 import type { Feedback } from '../types';
-import { 
-  LineChart, 
-  Line, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  ResponsiveContainer 
-} from 'recharts';
-import { Calendar, Clock, Award, ArrowRight, TrendingUp } from 'lucide-react';
+import { SessionHistoryChart } from '../components/SessionHistoryChart';
+import { Calendar, Clock, Award, ArrowRight } from 'lucide-react';
 
 export const History: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [historyData, setHistoryData] = useState<Feedback[]>([]);
+  const [lastDoc, setLastDoc] = useState<any>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  const loadData = async (isFirstLoad = false) => {
+    if (!user) return;
+    if (isFirstLoad) {
+      setLoading(true);
+    } else {
+      setLoadingMore(true);
+    }
+    
+    try {
+      const currentLastDoc = isFirstLoad ? null : lastDoc;
+      const res = await getUserFeedbackPaginated(user.uid, currentLastDoc, 10);
+      
+      setHistoryData(prev => isFirstLoad ? res.items : [...prev, ...res.items]);
+      setLastDoc(res.lastVisible);
+      setHasMore(res.hasMore);
+    } catch (err) {
+      console.error("Error loading feedback history:", err);
+    } finally {
+      if (isFirstLoad) {
+        setTimeout(() => setLoading(false), 800);
+      } else {
+        setLoadingMore(false);
+      }
+    }
+  };
 
   useEffect(() => {
-    if (!user) return;
-
-    const fetchHistory = async () => {
-      setLoading(true);
-      try {
-        const list = await getUserFeedbackList(user.uid);
-        
-        // Sort chronologically for the chart
-        const sortedList = [...list].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-        
-        setHistoryData(sortedList);
-      } catch (err) {
-        console.error("Error loading feedback history:", err);
-      } finally {
-        // Add a slight artificial delay to show off the skeletons
-        setTimeout(() => setLoading(false), 800);
-      }
-    };
-
-    fetchHistory();
+    loadData(true);
   }, [user]);
 
   // If there are no sessions, seed mock data so the history screen displays a beautiful chart
@@ -151,54 +153,7 @@ export const History: React.FC = () => {
         ) : (
           <div className="space-y-8">
             {/* Recharts Score Progress Chart Card */}
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-              <div className="flex items-center gap-2 mb-6">
-                <TrendingUp className="h-4 w-4 text-brand" />
-                <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Score Progression Over Time</h2>
-              </div>
-              <div className="h-72 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                    <XAxis 
-                      dataKey="name" 
-                      stroke="#94a3b8" 
-                      fontSize={11} 
-                      tickLine={false} 
-                      axisLine={false} 
-                      dy={10} 
-                    />
-                    <YAxis 
-                      domain={[0, 10]} 
-                      stroke="#94a3b8" 
-                      fontSize={11} 
-                      tickLine={false} 
-                      axisLine={false} 
-                      dx={-10}
-                    />
-                    <Tooltip 
-                      contentStyle={{
-                        backgroundColor: '#ffffff',
-                        border: '1px solid #e2e8f0',
-                        borderRadius: '12px',
-                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
-                        fontSize: '11px',
-                        fontWeight: '600'
-                      }}
-                      labelClassName="text-slate-500 font-bold"
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="score" 
-                      stroke="#006865" 
-                      strokeWidth={3} 
-                      dot={{ r: 4, strokeWidth: 2, stroke: '#006865', fill: '#ffffff' }}
-                      activeDot={{ r: 6, strokeWidth: 0, fill: '#006865' }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
+            <SessionHistoryChart data={chartData} />
 
             {/* Past Sessions List */}
             <div className="space-y-4">
@@ -238,6 +193,18 @@ export const History: React.FC = () => {
                   </div>
                 ))}
               </div>
+
+              {hasMore && (
+                <div className="flex justify-center mt-6">
+                  <button
+                    onClick={() => loadData(false)}
+                    disabled={loadingMore}
+                    className="inline-flex items-center justify-center rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 px-6 text-xs transition-all disabled:opacity-50 cursor-pointer shadow-sm"
+                  >
+                    {loadingMore ? 'Loading...' : 'Load More'}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}

@@ -25,7 +25,8 @@ import {
   addDoc,
   orderBy,
   connectFirestoreEmulator,
-  limit
+  limit,
+  startAfter
 } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import type { UserProfile, Session, Question, Feedback, QuestionPack } from './types';
@@ -751,6 +752,65 @@ export const getUserFeedbackList = async (userId: string): Promise<Feedback[]> =
   }
 };
 
+export const getUserFeedbackPaginated = async (
+  userId: string,
+  lastDoc: any = null,
+  pageSize: number = 10
+): Promise<{ items: Feedback[]; lastVisible: any; hasMore: boolean }> => {
+  trackFirestoreRead(`getUserFeedbackPaginated: ${userId}`);
+  if (!MOCK_MODE) {
+    try {
+      const collRef = collection(firestoreDb, 'feedback');
+      let q = query(
+        collRef,
+        where('userId', '==', userId),
+        orderBy('date', 'desc'),
+        limit(pageSize + 1)
+      );
+      
+      if (lastDoc) {
+        q = query(
+          collRef,
+          where('userId', '==', userId),
+          orderBy('date', 'desc'),
+          startAfter(lastDoc),
+          limit(pageSize + 1)
+        );
+      }
+      
+      const snap = await getDocs(q);
+      const docs = snap.docs;
+      const hasMore = docs.length > pageSize;
+      const slicedDocs = hasMore ? docs.slice(0, pageSize) : docs;
+      
+      const items = slicedDocs.map(d => d.data() as Feedback);
+      const lastVisible = slicedDocs.length > 0 ? slicedDocs[slicedDocs.length - 1] : null;
+      
+      return { items, lastVisible, hasMore };
+    } catch (err) {
+      Sentry.captureException(err, { tags: { feature: 'feedback-history' } });
+      throw err;
+    }
+  } else {
+    const allFeedback = getLocalData('im_feedback', []);
+    const userFeedback = allFeedback
+      .filter((f: Feedback) => f.userId === userId || f.reviewerId === userId)
+      .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    
+    let startIndex = 0;
+    if (lastDoc) {
+      startIndex = userFeedback.findIndex((f: Feedback) => f.sessionId === lastDoc.sessionId) + 1;
+    }
+    
+    const paginated = userFeedback.slice(startIndex, startIndex + pageSize + 1);
+    const hasMore = paginated.length > pageSize;
+    const items = hasMore ? paginated.slice(0, pageSize) : paginated;
+    const lastVisible = items.length > 0 ? items[items.length - 1] : null;
+    
+    return { items, lastVisible, hasMore };
+  }
+};
+
 // ----------------------------------------------------
 // MATCHMAKING & TRANSCRIPT & QUESTION SAVING APIs
 // ----------------------------------------------------
@@ -1097,6 +1157,66 @@ export const getWeeklyLeaderboard = async (): Promise<any[]> => {
       board = getLocalData('im_weekly_leaderboard', []);
     }
     return board;
+  }
+};
+
+export const getWeeklyLeaderboardPaginated = async (
+  lastDoc: any = null,
+  pageSize: number = 10
+): Promise<{ items: any[]; lastVisible: any; hasMore: boolean }> => {
+  trackFirestoreRead('getWeeklyLeaderboardPaginated');
+  if (!MOCK_MODE) {
+    try {
+      const collRef = collection(firestoreDb, 'weekly_leaderboard');
+      let q = query(
+        collRef,
+        orderBy('rank', 'asc'),
+        limit(pageSize + 1)
+      );
+      
+      if (lastDoc) {
+        q = query(
+          collRef,
+          orderBy('rank', 'asc'),
+          startAfter(lastDoc),
+          limit(pageSize + 1)
+        );
+      }
+      
+      const snap = await getDocs(q);
+      const docs = snap.docs;
+      const hasMore = docs.length > pageSize;
+      const slicedDocs = hasMore ? docs.slice(0, pageSize) : docs;
+      
+      const items = slicedDocs.map(d => d.data());
+      const lastVisible = slicedDocs.length > 0 ? slicedDocs[slicedDocs.length - 1] : null;
+      
+      return { items, lastVisible, hasMore };
+    } catch (err) {
+      Sentry.captureException(err, { tags: { feature: 'leaderboard' } });
+      throw err;
+    }
+  } else {
+    // If not calculated yet, trigger a mock calculation
+    let board = getLocalData('im_weekly_leaderboard', []);
+    if (board.length === 0) {
+      const currentUser = localStorage.getItem('im_current_user');
+      const uid = currentUser ? JSON.parse(currentUser).uid : 'mock_user_123';
+      await triggerMockLeaderboardCalculation(uid);
+      board = getLocalData('im_weekly_leaderboard', []);
+    }
+    
+    let startIndex = 0;
+    if (lastDoc) {
+      startIndex = board.findIndex((item: any) => item.userId === lastDoc.userId) + 1;
+    }
+    
+    const paginated = board.slice(startIndex, startIndex + pageSize + 1);
+    const hasMore = paginated.length > pageSize;
+    const items = hasMore ? paginated.slice(0, pageSize) : paginated;
+    const lastVisible = items.length > 0 ? items[items.length - 1] : null;
+    
+    return { items, lastVisible, hasMore };
   }
 };
 

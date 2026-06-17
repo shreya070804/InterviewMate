@@ -214,8 +214,14 @@ export const Navbar: React.FC = () => {
                   className="flex items-center gap-2 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-1 pr-3 hover:bg-slate-100 dark:hover:bg-slate-750 transition-all focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2"
                 >
                   <img
-                    src={profile?.photoURL || user.photoURL}
+                    src={profile?.photoURL || user.photoURL || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&h=150&q=80'}
                     alt={`${profile?.displayName || user.displayName || 'User'}'s profile avatar`}
+                    loading="lazy"
+                    decoding="async"
+                    onError={(e) => {
+                      e.currentTarget.onerror = null;
+                      e.currentTarget.src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&h=150&q=80';
+                    }}
                     className="h-7 w-7 rounded-full object-cover"
                   />
                   <span className="text-sm font-medium text-slate-700 max-w-[120px] truncate">
@@ -311,8 +317,14 @@ export const Navbar: React.FC = () => {
           <div className="border-t border-slate-100 dark:border-slate-800 my-2 pt-2">
             <div className="flex items-center gap-3 px-3 py-2">
               <img
-                src={profile?.photoURL || user.photoURL}
+                src={profile?.photoURL || user.photoURL || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&h=150&q=80'}
                 alt={`${profile?.displayName || user.displayName || 'User'}'s profile avatar`}
+                loading="lazy"
+                decoding="async"
+                onError={(e) => {
+                  e.currentTarget.onerror = null;
+                  e.currentTarget.src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&h=150&q=80';
+                }}
                 className="h-10 w-10 rounded-full object-cover"
               />
               <div>

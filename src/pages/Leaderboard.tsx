@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Layout } from '../components/Layout';
-import { getWeeklyLeaderboard, optInToLeaderboard } from '../firebase';
-import { Trophy, ShieldAlert, Award, Star } from 'lucide-react';
+import { getWeeklyLeaderboardPaginated, optInToLeaderboard } from '../firebase';
+import { LeaderboardTable } from '../components/LeaderboardTable';
+import { Trophy, ShieldAlert, Award } from 'lucide-react';
 
 interface LeaderboardEntry {
   rank: number;
@@ -18,6 +19,9 @@ export const Leaderboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isOptedIn, setIsOptedIn] = useState(false);
   const [submittingOptIn, setSubmittingOptIn] = useState(false);
+  const [lastDoc, setLastDoc] = useState<any>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   useEffect(() => {
     if (profile) {
@@ -25,20 +29,31 @@ export const Leaderboard: React.FC = () => {
     }
   }, [profile]);
 
-  const loadLeaderboardData = async () => {
-    setLoading(true);
+  const loadLeaderboardData = async (isFirstLoad = false) => {
+    if (isFirstLoad) {
+      setLoading(true);
+    } else {
+      setLoadingMore(true);
+    }
     try {
-      const data = await getWeeklyLeaderboard();
-      setBoard(data);
+      const currentLastDoc = isFirstLoad ? null : lastDoc;
+      const res = await getWeeklyLeaderboardPaginated(currentLastDoc, 10);
+      setBoard(prev => isFirstLoad ? res.items : [...prev, ...res.items]);
+      setLastDoc(res.lastVisible);
+      setHasMore(res.hasMore);
     } catch (e) {
       console.error("Failed to load leaderboard:", e);
     } finally {
-      setLoading(false);
+      if (isFirstLoad) {
+        setLoading(false);
+      } else {
+        setLoadingMore(false);
+      }
     }
   };
 
   useEffect(() => {
-    loadLeaderboardData();
+    loadLeaderboardData(true);
   }, []);
 
   const handleOptInToggle = async () => {
@@ -52,21 +67,14 @@ export const Leaderboard: React.FC = () => {
         profile.displayName || user.displayName || 'Developer'
       );
       setIsOptedIn(nextOptIn);
-      // Reload rankings
-      await loadLeaderboardData();
+      // Reload rankings from start
+      await loadLeaderboardData(true);
     } catch (err) {
       console.error(err);
       alert("Failed to update leaderboard settings");
     } finally {
       setSubmittingOptIn(false);
     }
-  };
-
-  const getRankBadge = (rank: number) => {
-    if (rank === 1) return <span className="text-xl">🥇</span>;
-    if (rank === 2) return <span className="text-xl">🥈</span>;
-    if (rank === 3) return <span className="text-xl">🥉</span>;
-    return <span className="text-xs font-mono font-bold text-slate-500 dark:text-slate-400">#{rank}</span>;
   };
 
   return (
@@ -146,73 +154,21 @@ export const Leaderboard: React.FC = () => {
               <p className="text-xs mt-1">Mock sessions completed this week will calculate ranks automatically.</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-left text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                    <th className="px-6 py-4">Rank</th>
-                    <th className="px-6 py-4">User</th>
-                    <th className="px-6 py-4 text-center">Sessions Done</th>
-                    <th className="px-6 py-4 text-right">Avg Score</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {board.map((player) => {
-                    const isCurrentUser = user && player.userId === user.uid;
-                    return (
-                      <tr 
-                        key={player.userId}
-                        className={`transition-colors hover:bg-slate-50/50 dark:hover:bg-slate-850/50 ${
-                          isCurrentUser 
-                            ? 'bg-teal-50/40 dark:bg-teal-950/20 border-l-4 border-l-brand font-semibold' 
-                            : ''
-                        }`}
-                      >
-                        <td className="whitespace-nowrap px-6 py-4.5">
-                          <div className="flex items-center gap-2">
-                            {getRankBadge(player.rank)}
-                          </div>
-                        </td>
-                        <td className="whitespace-nowrap px-6 py-4.5">
-                          <div className="flex items-center gap-3">
-                            <img
-                              src={`https://api.dicebear.com/7.x/adventurer/svg?seed=${player.userId}`}
-                              alt={`${player.displayName}'s profile avatar`}
-                              className="h-8 w-8 rounded-full border border-slate-200 dark:border-slate-700 object-cover"
-                            />
-                            <div>
-                              <span className="text-slate-900 dark:text-white font-medium flex items-center gap-1.5">
-                                {player.displayName}
-                                {isCurrentUser && (
-                                  <span className="text-[9px] uppercase bg-brand text-white font-bold px-1.5 py-0.5 rounded tracking-wider">
-                                    You
-                                  </span>
-                                )}
-                              </span>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="whitespace-nowrap px-6 py-4.5 text-center text-slate-600 dark:text-slate-350">
-                          {player.sessionsCompleted}
-                        </td>
-                        <td className="whitespace-nowrap px-6 py-4.5 text-right font-mono font-bold">
-                          <span className={`inline-flex items-center gap-1 text-sm ${
-                            player.avgScore >= 8.0 
-                              ? 'text-emerald-600 dark:text-emerald-400' 
-                              : player.avgScore >= 5.0 
-                                ? 'text-amber-600 dark:text-amber-400' 
-                                : 'text-slate-500'
-                          }`}>
-                            <Star className="h-3.5 w-3.5 fill-current shrink-0" />
-                            {player.avgScore.toFixed(1)}/10
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <>
+              <LeaderboardTable board={board} currentUserUid={user?.uid} />
+              
+              {hasMore && (
+                <div className="flex justify-center py-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+                  <button
+                    onClick={() => loadLeaderboardData(false)}
+                    disabled={loadingMore}
+                    className="inline-flex items-center justify-center rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 text-white font-bold py-2 px-5 text-xs transition-all disabled:opacity-50 cursor-pointer shadow-sm"
+                  >
+                    {loadingMore ? 'Loading...' : 'Load More'}
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
 
