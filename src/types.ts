@@ -15,6 +15,10 @@ export interface UserProfile {
   streak?: number;
   lastStreakUpdate?: any;
   hasCompletedOnboarding?: boolean;
+  /** New onboarding survey fields */
+  experienceLevel?: 'Student' | '0-1 yrs' | '1-3 yrs' | '3+ yrs';
+  preparingFor?: 'Internships' | 'Full-time jobs' | 'Skill building';
+  interviewPace?: 'Relaxed' | 'Standard' | 'Intense';
 }
 
 export interface Session {
