@@ -14,10 +14,10 @@ import {
   sendChatMessage,
   subscribeToChatMessages,
   checkApiUsage,
-  incrementApiUsage,
   showToast,
   runCode as firebaseRunCode
 } from '../firebase';
+import { generateFeedbackCallable, generateQuestionsCallable } from '../utils/apiClient';
 import type { Session, Question, UserProfile } from '../types';
 import AgoraRTC from 'agora-rtc-sdk-ng';
 import type { IAgoraRTCClient, ICameraVideoTrack, IMicrophoneAudioTrack } from 'agora-rtc-sdk-ng';
@@ -707,7 +707,6 @@ export const InterviewRoom: React.FC = () => {
     if (!transcriptToAnalyze.trim()) return;
 
     setIsAnalyzingVoice(true);
-    const apiKey = localStorage.getItem('im_claude_key') || import.meta.env.VITE_ANTHROPIC_API_KEY || '';
 
     const duration = durationSeconds || 15;
     const wordCount = transcriptToAnalyze.trim().split(/\s+/).length;
@@ -723,70 +722,48 @@ export const InterviewRoom: React.FC = () => {
       }
     });
 
-    if (apiKey) {
-      try {
-        if (user) {
-          await checkApiUsage(user.uid);
-        }
-      } catch (err: any) {
-        showToast(err.message || "Daily AI usage limit reached, resets at midnight", "error");
-        setIsAnalyzingVoice(false);
-        return;
+    // Enforce server-side check and API usage increment
+    try {
+      if (user) {
+        await checkApiUsage(user.uid);
       }
-      try {
-        const response = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: {
-            'x-api-key': apiKey,
-            'anthropic-version': '2023-06-01',
-            'content-type': 'application/json',
-            'dangerously-allow-html-user-override': 'true'
-          } as any,
-          body: JSON.stringify({
-            model: 'claude-sonnet-4-20250514',
-            max_tokens: 1000,
-            messages: [
-              {
-                role: 'user',
-                content: `Given this transcript and a speaking pace of ${wpm} words per minute, assess confidence level. Ideal pace is 130-160 wpm. Transcript: "${transcriptToAnalyze}". Return JSON with: pace_assessment (too fast/ideal/too slow), confidence_score (1-10), specific_feedback (1-2 sentences about pacing and tone based on word choice).`
-              }
-            ],
-            system: "You are an expert HR interviewer. Analyze the provided spoken transcript. Respond ONLY with a valid JSON object containing: clarity_score (number 1-10), structure_score (number 1-10 based on STAR structure), filler_word_count (number), feedback (string, exactly 2 sentences), confidence_score (number 1-10), pace_assessment (string: 'too fast', 'ideal', or 'too slow'), and specific_feedback (string, 1-2 sentences about pacing and tone based on word choice)."
-          })
+    } catch (err: any) {
+      showToast(err.message || "Daily AI usage limit reached, resets at midnight", "error");
+      setIsAnalyzingVoice(false);
+      return;
+    }
+
+    try {
+      const response = await generateFeedbackCallable({
+        type: 'voice',
+        transcriptToAnalyze,
+        wpm
+      });
+
+      const responseData: any = response.data;
+      const jsonText = responseData.content[0].text;
+      const cleanJson = jsonText.replace(/```json/g, '').replace(/```/g, '').trim();
+      const parsed = JSON.parse(cleanJson);
+      
+      if (sessionId) {
+        await updateSession(sessionId, {
+          hrScores: {
+            clarity_score: parsed.clarity_score || 7,
+            structure_score: parsed.structure_score || 7,
+            filler_word_count: parsed.filler_word_count !== undefined ? parsed.filler_word_count : fillerCount,
+            feedback: parsed.feedback || 'Good communication flow.',
+            confidence_score: parsed.confidence_score || 8,
+            wpm: wpm,
+            pace_assessment: parsed.pace_assessment || (wpm < 130 ? 'too slow' : wpm > 160 ? 'too fast' : 'ideal'),
+            specific_feedback: parsed.specific_feedback || 'Steady pacing and structured answer formulation.'
+          }
         });
-
-        if (response.ok) {
-          const data = await response.json();
-          
-          if (user) {
-            await incrementApiUsage(user.uid);
-          }
-
-          const jsonText = data.content[0].text;
-          const cleanJson = jsonText.replace(/```json/g, '').replace(/```/g, '').trim();
-          const parsed = JSON.parse(cleanJson);
-          
-          if (sessionId) {
-            await updateSession(sessionId, {
-              hrScores: {
-                clarity_score: parsed.clarity_score || 7,
-                structure_score: parsed.structure_score || 7,
-                filler_word_count: parsed.filler_word_count !== undefined ? parsed.filler_word_count : fillerCount,
-                feedback: parsed.feedback || 'Good communication flow.',
-                confidence_score: parsed.confidence_score || 8,
-                wpm: wpm,
-                pace_assessment: parsed.pace_assessment || (wpm < 130 ? 'too slow' : wpm > 160 ? 'too fast' : 'ideal'),
-                specific_feedback: parsed.specific_feedback || 'Steady pacing and structured answer formulation.'
-              }
-            });
-          }
-          setIsAnalyzingVoice(false);
-          return;
-        }
-      } catch (err) {
-        console.warn("Claude voice evaluation failed, utilizing offline evaluator:", err);
-        Sentry.captureException(err, { tags: { feature: 'feedback-generation' } });
       }
+      setIsAnalyzingVoice(false);
+      return;
+    } catch (err) {
+      console.warn("Claude voice evaluation failed, utilizing offline evaluator:", err);
+      Sentry.captureException(err, { tags: { feature: 'feedback-generation' } });
     }
 
     // High fidelity offline mock assessment
@@ -875,80 +852,49 @@ export const InterviewRoom: React.FC = () => {
     setGenError(null);
     setGeneratedQuestions([]);
 
-    const apiKey = localStorage.getItem('im_claude_key') || import.meta.env.VITE_ANTHROPIC_API_KEY || '';
     const resumeText = candidateProfile?.resumeText || (MOCK_MODE ? MOCK_CANDIDATE_RESUME : '');
 
-    const tailorPrompt = tailorToResume && resumeText 
-      ? ` Here is the candidate's resume: ${resumeText}. Generate questions that specifically probe the skills and projects mentioned in this resume.`
-      : '';
+    // Enforce server-side check and API usage increment
+    try {
+      if (user) {
+        await checkApiUsage(user.uid);
+      }
+    } catch (err: any) {
+      showToast(err.message || "Daily AI usage limit reached, resets at midnight", "error");
+      setIsGenerating(false);
+      return;
+    }
 
-    if (apiKey) {
-      try {
-        if (user) {
-          await checkApiUsage(user.uid);
-        }
-      } catch (err: any) {
-        showToast(err.message || "Daily AI usage limit reached, resets at midnight", "error");
+    try {
+      const response = await generateQuestionsCallable({
+        jobRole,
+        difficulty: genDifficulty,
+        resumeText,
+        tailorToResume
+      });
+
+      const responseData: any = response.data;
+      const jsonText = responseData.content[0].text;
+      const cleanJson = jsonText.replace(/```json/g, '').replace(/```/g, '').trim();
+      const parsed = JSON.parse(cleanJson);
+
+      if (Array.isArray(parsed)) {
+        const mapped = parsed.map((item, idx) => ({
+          id: `ai_${Date.now()}_${idx}`,
+          title: item.title || 'Untitled Question',
+          description: item.description || 'No description provided.',
+          difficulty: item.difficulty || genDifficulty,
+          category: item.category || 'DSA'
+        }));
+        setGeneratedQuestions(mapped);
         setIsGenerating(false);
         return;
+      } else {
+        throw new Error("Response is not a valid JSON array");
       }
-      try {
-        const response = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: {
-            'x-api-key': apiKey,
-            'anthropic-version': '2023-06-01',
-            'content-type': 'application/json',
-            'dangerously-allow-html-user-override': 'true'
-          } as any,
-          body: JSON.stringify({
-            model: 'claude-sonnet-4-20250514',
-            max_tokens: 2000,
-            messages: [
-              {
-                role: 'user',
-                content: `Role: ${jobRole}, Difficulty: ${genDifficulty}.${tailorPrompt}`
-              }
-            ],
-            system: "You are a senior technical interviewer. Generate 5 interview questions for the given role and difficulty. Respond ONLY with a valid JSON array, no markdown, no explanation. Each object must have: title (string), description (string, 2-3 sentences), difficulty (Easy/Medium/Hard), category (DSA/System Design/Frontend/HR)."
-          })
-        });
-
-        if (!response.ok) {
-          throw new Error(`Claude API responded with status ${response.status}`);
-        }
-
-        const responseData = await response.json();
-        
-        if (user) {
-          await incrementApiUsage(user.uid);
-        }
-
-        const jsonText = responseData.content[0].text;
-        const cleanJson = jsonText.replace(/```json/g, '').replace(/```/g, '').trim();
-        const parsed = JSON.parse(cleanJson);
-
-        if (Array.isArray(parsed)) {
-          const mapped = parsed.map((item, idx) => ({
-            id: `ai_${Date.now()}_${idx}`,
-            title: item.title || 'Untitled Question',
-            description: item.description || 'No description provided.',
-            difficulty: item.difficulty || genDifficulty,
-            category: item.category || 'DSA'
-          }));
-          setGeneratedQuestions(mapped);
-          setIsGenerating(false);
-          return;
-        } else {
-          throw new Error("Response is not a valid JSON array");
-        }
-      } catch (err: any) {
-        console.warn("Claude question generation failed, using local fallback:", err);
-        Sentry.captureException(err, { tags: { feature: 'question-generation' } });
-        setGenError(err.message || "Failed to generate questions. Click Retry to try again.");
-        setIsGenerating(false);
-        return;
-      }
+    } catch (err: any) {
+      console.warn("Claude question generation failed, using local fallback:", err);
+      Sentry.captureException(err, { tags: { feature: 'question-generation' } });
     }
 
     // Local mock fallback

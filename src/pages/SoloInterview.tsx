@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { saveSoloSession, saveFeedback, checkApiUsage, incrementApiUsage, showToast, runCode as firebaseRunCode } from '../firebase';
+import { saveSoloSession, saveFeedback, checkApiUsage, showToast, runCode as firebaseRunCode } from '../firebase';
+import { soloInterviewerResponseCallable } from '../utils/apiClient';
 import * as Sentry from '@sentry/react';
 import { Layout } from '../components/Layout';
 
@@ -163,64 +164,41 @@ export const SoloInterview: React.FC = () => {
     setStreamingText('');
 
     let signal: 'easier' | 'same' | 'harder' = 'same';
-    const apiKey = localStorage.getItem('im_claude_key') || import.meta.env.VITE_ANTHROPIC_API_KEY || '';
-
-    if (apiKey) {
-      try {
-        if (user) {
-          await checkApiUsage(user.uid);
-        }
-        
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 4000);
-
-        const evalMessages = [
-          ...chatHistory.current.slice(0, -1),
-          {
-            role: 'user',
-            content: `${chatHistory.current[chatHistory.current.length - 1].content}\n\nBased on this response quality, should the next question be easier, the same, or harder? Respond with only one word: easier, same, or harder.`
-          }
-        ];
-
-        const evalResponse = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: {
-            'x-api-key': apiKey,
-            'anthropic-version': '2023-06-01',
-            'content-type': 'application/json',
-            'dangerously-allow-html-user-override': 'true'
-          },
-          signal: controller.signal,
-          body: JSON.stringify({
-            model: 'claude-sonnet-4-20250514',
-            max_tokens: 10,
-            messages: evalMessages
-          })
-        });
-
-        clearTimeout(timeoutId);
-
-        if (evalResponse.ok) {
-          const evalData = await evalResponse.json();
-          
-          if (user) {
-            await incrementApiUsage(user.uid);
-          }
-
-          const evalText = evalData.content?.[0]?.text?.trim().toLowerCase() || 'same';
-          console.log('Adaptive Difficulty response:', evalText);
-          if (evalText.includes('easier')) signal = 'easier';
-          else if (evalText.includes('harder')) signal = 'harder';
-        } else {
-          console.warn('Evaluation response not OK, using simulation');
-          signal = simulateDifficultyAssessment(userText, code);
-        }
-      } catch (err) {
-        console.warn('Evaluation call failed/timed out, using simulation:', err);
-        Sentry.captureException(err, { tags: { feature: 'feedback-generation' } });
-        signal = simulateDifficultyAssessment(userText, code);
+    // Enforce server-side check and API usage increment
+    try {
+      if (user) {
+        await checkApiUsage(user.uid);
       }
-    } else {
+    } catch (err: any) {
+      showToast(err.message || "Daily AI usage limit reached, resets at midnight", "error");
+      setIsStreaming(false);
+      simulateChatStreaming();
+      return;
+    }
+
+    try {
+      const evalMessages = [
+        ...chatHistory.current.slice(0, -1),
+        {
+          role: 'user',
+          content: `${chatHistory.current[chatHistory.current.length - 1].content}\n\nBased on this response quality, should the next question be easier, the same, or harder? Respond with only one word: easier, same, or harder.`
+        }
+      ];
+
+      const response = await soloInterviewerResponseCallable({
+        messages: evalMessages,
+        systemPrompt: "Analyze the candidate response and decide difficulty trend.",
+        maxTokens: 10
+      });
+
+      const responseData: any = response.data;
+      const evalText = responseData.content?.[0]?.text?.trim().toLowerCase() || 'same';
+      console.log('Adaptive Difficulty response:', evalText);
+      if (evalText.includes('easier')) signal = 'easier';
+      else if (evalText.includes('harder')) signal = 'harder';
+    } catch (err) {
+      console.warn('Evaluation call failed/timed out, using simulation:', err);
+      Sentry.captureException(err, { tags: { feature: 'feedback-generation' } });
       signal = simulateDifficultyAssessment(userText, code);
     }
 
@@ -244,94 +222,55 @@ export const SoloInterview: React.FC = () => {
 
   // Streaming parser
   const getClaudeResponseStream = async (history: { role: 'user' | 'assistant'; content: string }[], systemPrompt: string) => {
-    const apiKey = localStorage.getItem('im_claude_key') || import.meta.env.VITE_ANTHROPIC_API_KEY || '';
-    
-    if (apiKey) {
-      try {
-        if (user) {
-          await checkApiUsage(user.uid);
-        }
-      } catch (err: any) {
-        showToast(err.message || "Daily AI usage limit reached, resets at midnight", "error");
-        setIsStreaming(false);
-        simulateChatStreaming();
-        return;
+    // Enforce server-side check and API usage increment
+    try {
+      if (user) {
+        await checkApiUsage(user.uid);
       }
-      try {
-        const response = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: {
-            'x-api-key': apiKey,
-            'anthropic-version': '2023-06-01',
-            'content-type': 'application/json',
-            'dangerously-allow-html-user-override': 'true'
-          },
-          body: JSON.stringify({
-            model: 'claude-sonnet-4-20250514',
-            max_tokens: 1000,
-            system: systemPrompt,
-            messages: history,
-            stream: true
-          })
-        });
+    } catch (err: any) {
+      showToast(err.message || "Daily AI usage limit reached, resets at midnight", "error");
+      setIsStreaming(false);
+      simulateChatStreaming();
+      return;
+    }
 
-        if (!response.ok) {
-          throw new Error('Streaming failed');
+    try {
+      const response = await soloInterviewerResponseCallable({
+        messages: history,
+        systemPrompt,
+        maxTokens: 1000
+      });
+
+      const responseData: any = response.data;
+      const fullText = responseData.content?.[0]?.text || '';
+      
+      // Simulate typing effect
+      let wordIdx = 0;
+      const words = fullText.split(' ');
+      setStreamingText('');
+
+      const interval = setInterval(() => {
+        if (wordIdx < words.length) {
+          setStreamingText(prev => prev + (wordIdx === 0 ? '' : ' ') + words[wordIdx]);
+          wordIdx++;
+        } else {
+          clearInterval(interval);
+          setIsStreaming(false);
+          const aiMsg: Message = {
+            id: `msg_${Date.now()}`,
+            sender: 'ai',
+            text: fullText,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          };
+          setMessages(prev => [...prev, aiMsg]);
+          chatHistory.current.push({ role: 'assistant', content: fullText });
         }
+      }, 40); // 40ms per word creates a smooth stream effect
 
-        if (user) {
-          await incrementApiUsage(user.uid);
-        }
-
-        const reader = response.body?.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        let fullText = '';
-
-        if (reader) {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
-
-            for (const line of lines) {
-              const cleaned = line.trim();
-              if (cleaned.startsWith('data: ')) {
-                const jsonStr = cleaned.slice(6);
-                if (jsonStr === '[DONE]') continue;
-                try {
-                  const parsed = JSON.parse(jsonStr);
-                  if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
-                    fullText += parsed.delta.text;
-                    setStreamingText(fullText);
-                  }
-                } catch (e) {
-                  // Incomplete JSON line, skip
-                }
-              }
-            }
-          }
-        }
-
-        // Finalize
-        setIsStreaming(false);
-        const aiMsg: Message = {
-          id: `msg_${Date.now()}`,
-          sender: 'ai',
-          text: fullText,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        };
-        setMessages(prev => [...prev, aiMsg]);
-        chatHistory.current.push({ role: 'assistant', content: fullText });
-        return;
-
-      } catch (err) {
-        console.error('Claude stream API failed, falling back to simulated chat stream:', err);
-        Sentry.captureException(err, { tags: { feature: 'feedback-generation' } });
-      }
+      return;
+    } catch (err) {
+      console.error('Claude stream API failed, falling back to simulated chat stream:', err);
+      Sentry.captureException(err, { tags: { feature: 'feedback-generation' } });
     }
 
     // High fidelity simulator fallback

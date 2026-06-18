@@ -116,6 +116,14 @@ export const Navbar: React.FC = () => {
               >
                 {t('navbar.skill_tracker')}
               </Link>
+              <Link
+                to="/jd-analysis"
+                className={`text-sm font-medium transition-colors hover:text-brand ${
+                  isActive('/jd-analysis') ? 'text-brand border-b-2 border-brand py-5' : 'text-slate-500 dark:text-slate-400'
+                }`}
+              >
+                {t('navbar.jd_analysis')}
+              </Link>
               <span className="text-sm font-medium text-slate-400 dark:text-slate-500 cursor-not-allowed">{t('navbar.resources')}</span>
             </div>
           </div>
@@ -309,10 +317,19 @@ export const Navbar: React.FC = () => {
             to="/skills"
             onClick={() => setMobileMenuOpen(false)}
             className={`block rounded-md px-3 py-2 text-base font-medium ${
-              isActive('/skills') ? 'bg-brand/10 text-brand' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+              isActive('/skills') ? 'bg-brand/10 text-brand' : 'text-slate-650 dark:text-slate-350 hover:bg-slate-50 dark:hover:bg-slate-800'
             }`}
           >
             {t('navbar.skill_tracker')}
+          </Link>
+          <Link
+            to="/jd-analysis"
+            onClick={() => setMobileMenuOpen(false)}
+            className={`block rounded-md px-3 py-2 text-base font-medium ${
+              isActive('/jd-analysis') ? 'bg-brand/10 text-brand' : 'text-slate-650 dark:text-slate-350 hover:bg-slate-50 dark:hover:bg-slate-800'
+            }`}
+          >
+            {t('navbar.jd_analysis')}
           </Link>
           <div className="border-t border-slate-100 dark:border-slate-800 my-2 pt-2">
             <div className="flex items-center gap-3 px-3 py-2">

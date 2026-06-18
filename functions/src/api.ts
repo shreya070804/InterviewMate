@@ -17,7 +17,7 @@ function getJudge0Config(): { host: string; apiKey: string } {
   return { host, apiKey };
 }
 
-export async function callClaude(messages: any[], model = 'claude-sonnet-4-20250514') {
+export async function callClaude(messages: any[], model = 'claude-sonnet-4-20250514', system = '', maxTokens = 1000) {
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -26,7 +26,7 @@ export async function callClaude(messages: any[], model = 'claude-sonnet-4-20250
       'content-type': 'application/json',
       'dangerously-allow-html-user-override': 'true',
     } as any,
-    body: JSON.stringify({ model, max_tokens: 1000, messages, system: '' }),
+    body: JSON.stringify({ model, max_tokens: maxTokens, messages, system }),
   });
   if (!response.ok) {
     const txt = await response.text();

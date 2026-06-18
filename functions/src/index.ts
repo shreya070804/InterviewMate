@@ -1,7 +1,7 @@
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import { Resend } from 'resend';
-import { runJudge0 } from './api';
+import { runJudge0, callClaude } from './api';
 
 admin.initializeApp();
 
@@ -741,4 +741,199 @@ export const runCode = functions.https.onCall(async (data, context) => {
     throw new functions.https.HttpsError('internal', error.message || 'Failed to execute code.');
   }
 });
+
+async function checkAndIncrementClaudeUsage(uid: string, db: admin.firestore.Firestore): Promise<void> {
+  const docRef = db.collection('api_usage').doc(uid);
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  await db.runTransaction(async (transaction) => {
+    const docSnap = await transaction.get(docRef);
+    let claudeCallsToday = 0;
+
+    if (docSnap.exists) {
+      const docData = docSnap.data();
+      claudeCallsToday = docData?.claudeCallsToday || 0;
+      const docResetDate = docData?.lastResetDate;
+
+      let resetDateStr = '';
+      if (docResetDate) {
+        if (typeof docResetDate.toDate === 'function') {
+          resetDateStr = docResetDate.toDate().toISOString().split('T')[0];
+        } else if (docResetDate instanceof Date) {
+          resetDateStr = docResetDate.toISOString().split('T')[0];
+        } else if (typeof docResetDate === 'string') {
+          resetDateStr = docResetDate.split('T')[0];
+        }
+      }
+
+      if (resetDateStr !== todayStr) {
+        claudeCallsToday = 1;
+      } else {
+        claudeCallsToday += 1;
+      }
+    } else {
+      claudeCallsToday = 1;
+    }
+
+    if (claudeCallsToday > 50) {
+      throw new functions.https.HttpsError(
+        'resource-exhausted',
+        'Daily AI usage limit reached, resets at midnight'
+      );
+    }
+
+    transaction.set(docRef, {
+      claudeCallsToday,
+      lastResetDate: admin.firestore.Timestamp.fromDate(new Date(todayStr))
+    }, { merge: true });
+  });
+}
+
+export const generateFeedback = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be logged in.');
+  }
+
+  const uid = context.auth.uid;
+  const db = admin.firestore();
+
+  const { type, transcriptToAnalyze, wpm, questionText, codeString } = data;
+
+  await checkAndIncrementClaudeUsage(uid, db);
+
+  try {
+    let result;
+    if (type === 'voice') {
+      if (!transcriptToAnalyze) {
+        throw new functions.https.HttpsError('invalid-argument', 'Missing transcriptToAnalyze.');
+      }
+      const messages = [
+        {
+          role: 'user',
+          content: `Given this transcript and a speaking pace of ${wpm || 0} words per minute, assess confidence level. Ideal pace is 130-160 wpm. Transcript: "${transcriptToAnalyze}". Return JSON with: pace_assessment (too fast/ideal/too slow), confidence_score (1-10), specific_feedback (1-2 sentences about pacing and tone based on word choice).`
+        }
+      ];
+      const system = "You are an expert HR interviewer. Analyze the provided spoken transcript. Respond ONLY with a valid JSON object containing: clarity_score (number 1-10), structure_score (number 1-10 based on STAR structure), filler_word_count (number), feedback (string, exactly 2 sentences), confidence_score (number 1-10), pace_assessment (string: 'too fast', 'ideal', or 'too slow'), and specific_feedback (string, 1-2 sentences about pacing and tone based on word choice).";
+
+      result = await callClaude(messages, 'claude-sonnet-4-20250514', system, 1000);
+    } else {
+      if (!questionText || !codeString) {
+        throw new functions.https.HttpsError('invalid-argument', 'Missing questionText or codeString.');
+      }
+      const userPrompt = `You are a senior software engineer reviewing a mock interview. The question was: ${questionText}. The candidate's code was: ${codeString}. Give structured feedback as JSON with these fields: correctness (score 1-10), efficiency (score 1-10), communication (score 1-10), strengths (array of 2-3 strings), improvements (array of 2-3 strings), overall_summary (2 sentences).`;
+      
+      const messages = [{ role: 'user', content: userPrompt }];
+      const system = "You evaluate software engineering candidates. Respond ONLY with a valid JSON block containing: correctness (number), efficiency (number), communication (number), strengths (array of strings), improvements (array of strings), overall_summary (string).";
+      
+      result = await callClaude(messages, 'claude-3-5-sonnet-20241022', system, 1000);
+    }
+
+    return result;
+  } catch (error: any) {
+    console.error('Claude generateFeedback error:', error);
+    throw new functions.https.HttpsError('internal', error.message || 'Failed to generate feedback.');
+  }
+});
+
+export const generateQuestions = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be logged in.');
+  }
+
+  const uid = context.auth.uid;
+  const db = admin.firestore();
+
+  const { jobRole, difficulty, resumeText, tailorToResume } = data;
+  if (!jobRole || !difficulty) {
+    throw new functions.https.HttpsError('invalid-argument', 'Missing jobRole or difficulty.');
+  }
+
+  await checkAndIncrementClaudeUsage(uid, db);
+
+  try {
+    const tailorPrompt = (tailorToResume && resumeText)
+      ? ` Here is the candidate's resume: ${resumeText}. Generate questions that specifically probe the skills and projects mentioned in this resume.`
+      : '';
+
+    const messages = [
+      {
+        role: 'user',
+        content: `Role: ${jobRole}, Difficulty: ${difficulty}.${tailorPrompt}`
+      }
+    ];
+    const system = "You are a senior technical interviewer. Generate 5 interview questions for the given role and difficulty. Respond ONLY with a valid JSON array, no markdown, no explanation. Each object must have: title (string), description (string, 2-3 sentences), difficulty (Easy/Medium/Hard), category (DSA/System Design/Frontend/HR).";
+
+    const result = await callClaude(messages, 'claude-sonnet-4-20250514', system, 2000);
+    return result;
+  } catch (error: any) {
+    console.error('Claude generateQuestions error:', error);
+    throw new functions.https.HttpsError('internal', error.message || 'Failed to generate questions.');
+  }
+});
+
+export const generateSummary = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be logged in.');
+  }
+
+  const uid = context.auth.uid;
+  const db = admin.firestore();
+
+  const { type, questionText, codeSnippet, scores, scoresByCategory, n } = data;
+
+  await checkAndIncrementClaudeUsage(uid, db);
+
+  try {
+    let result;
+    if (type === 'weakness') {
+      if (!scoresByCategory) {
+        throw new functions.https.HttpsError('invalid-argument', 'Missing scoresByCategory.');
+      }
+      const userPrompt = `Based on these category-wise average scores over the last ${n || 0} sessions: ${JSON.stringify(scoresByCategory)}, identify the user's top 2 weakest areas and suggest 3 specific topics to study for each. Return JSON with weak_areas (array of objects with category, avg_score, study_topics array).`;
+      const messages = [{ role: 'user', content: userPrompt }];
+      const system = "You identify candidate skill gaps. Respond ONLY with a valid JSON block containing: { \"weak_areas\": [ { \"category\": string, \"avg_score\": number, \"study_topics\": string[] } ] }.";
+      
+      result = await callClaude(messages, 'claude-sonnet-4-20250514', system, 1000);
+    } else {
+      if (!questionText || !codeSnippet || !scores) {
+        throw new functions.https.HttpsError('invalid-argument', 'Missing questionText, codeSnippet, or scores.');
+      }
+      const userPrompt = `Based on this mock interview session — Question: ${questionText}, Code submitted: ${codeSnippet}, Scores: correctness ${scores.correctness}/10, efficiency ${scores.efficiency}/10, communication ${scores.communication}/10 — generate a concise session summary as JSON with these fields: what_was_attempted (1 sentence), what_went_well (1 sentence), biggest_gap (1 sentence), top_study_topic (e.g. 'Binary Trees'), estimated_readiness (percentage 0-100). Return only valid JSON.`;
+      const messages = [{ role: 'user', content: userPrompt }];
+      const system = "You evaluate software engineering candidates. Respond ONLY with a valid JSON block containing: what_was_attempted (string), what_went_well (string), biggest_gap (string), top_study_topic (string), estimated_readiness (number).";
+
+      result = await callClaude(messages, 'claude-sonnet-4-20250514', system, 1000);
+    }
+
+    return result;
+  } catch (error: any) {
+    console.error('Claude generateSummary error:', error);
+    throw new functions.https.HttpsError('internal', error.message || 'Failed to generate summary.');
+  }
+});
+
+export const soloInterviewerResponse = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be logged in.');
+  }
+
+  const uid = context.auth.uid;
+  const db = admin.firestore();
+
+  const { messages, systemPrompt, maxTokens } = data;
+  if (!messages || !systemPrompt) {
+    throw new functions.https.HttpsError('invalid-argument', 'Missing messages or systemPrompt.');
+  }
+
+  await checkAndIncrementClaudeUsage(uid, db);
+
+  try {
+    const result = await callClaude(messages, 'claude-sonnet-4-20250514', systemPrompt, maxTokens || 1000);
+    return result;
+  } catch (error: any) {
+    console.error('Claude soloInterviewerResponse error:', error);
+    throw new functions.https.HttpsError('internal', error.message || 'Failed to get AI interviewer response.');
+  }
+});
+
 

@@ -29,7 +29,7 @@ import {
   startAfter
 } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import type { UserProfile, Session, Question, Feedback, QuestionPack } from './types';
+import type { UserProfile, Session, Question, Feedback, QuestionPack, JDAnalysisResult } from './types';
 import * as Sentry from '@sentry/react';
 
 const lastReadTimes: Record<string, number> = {};
@@ -1493,42 +1493,7 @@ export const runCode = async (
       throw new Error('Execution limit reached, try again in a bit');
     }
 
-    // Call Judge0 client-side in Mock Mode
-    const languageIdMap: { [key: string]: number } = {
-      javascript: 63,
-      python: 71,
-      java: 62,
-      cpp: 54
-    };
-
-    const apiKey = localStorage.getItem('im_judge0_key') || import.meta.env.VITE_JUDGE0_API_KEY || import.meta.env.VITE_RAPIDAPI_KEY || '';
-    if (apiKey) {
-      try {
-        const response = await fetch('https://judge0-ce.p.rapidapi.com/submissions?base64_encoded=true&wait=true', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-RapidAPI-Key': apiKey,
-            'X-RapidAPI-Host': 'judge0-ce.p.rapidapi.com',
-          },
-          body: JSON.stringify({
-            source_code: btoa(unescape(encodeURIComponent(code))),
-            language_id: languageIdMap[language] || 63,
-            stdin: '',
-            cpu_time_limit: 5,
-            memory_limit: 128000,
-            wall_time_limit: 10
-          })
-        });
-
-        if (!response.ok) {
-          throw new Error('RapidAPI response failed');
-        }
-        return await response.json();
-      } catch (err) {
-        console.warn('Judge0 API failed in mock mode, falling back to simulation:', err);
-      }
-    }
+    // In mock mode, we use local JS execution simulation fallback to avoid client-side API calls.
 
     // Local JS execution simulation fallback in mock mode
     return new Promise((resolve) => {
@@ -1701,6 +1666,57 @@ export const getRecentSignups = async (): Promise<any[]> => {
     return [...list]
       .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .slice(0, 10);
+  }
+};
+
+
+// ----------------------------------------------------
+// JOB DESCRIPTION GAP ANALYSIS APIs
+// ----------------------------------------------------
+
+export const saveJDAnalysis = async (userId: string, result: Omit<JDAnalysisResult, 'id' | 'createdAt'>): Promise<JDAnalysisResult> => {
+  const analysis: JDAnalysisResult = {
+    ...result,
+    createdAt: new Date().toISOString()
+  };
+
+  if (!MOCK_MODE) {
+    try {
+      const collRef = collection(firestoreDb, 'users', userId, 'jd_analyses');
+      const docRef = await addDoc(collRef, analysis);
+      return { ...analysis, id: docRef.id };
+    } catch (err) {
+      Sentry.captureException(err, { tags: { feature: 'jd-analysis' } });
+      throw err;
+    }
+  } else {
+    // Mock Mode
+    const key = `im_jd_analyses_${userId}`;
+    const list = getLocalData(key, []);
+    const newAnalysis = { ...analysis, id: Math.random().toString(36).substring(2, 11) };
+    list.push(newAnalysis);
+    setLocalData(key, list);
+    window.dispatchEvent(new Event('storage'));
+    return newAnalysis;
+  }
+};
+
+export const getJDAnalyses = async (userId: string): Promise<JDAnalysisResult[]> => {
+  trackFirestoreRead(`getJDAnalyses: ${userId}`);
+  if (!MOCK_MODE) {
+    try {
+      const collRef = collection(firestoreDb, 'users', userId, 'jd_analyses');
+      const q = query(collRef, orderBy('createdAt', 'desc'));
+      const snap = await getDocs(q);
+      return snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as JDAnalysisResult));
+    } catch (err) {
+      Sentry.captureException(err, { tags: { feature: 'jd-analysis' } });
+      throw err;
+    }
+  } else {
+    const key = `im_jd_analyses_${userId}`;
+    const list = getLocalData(key, []);
+    return [...list].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 };
 

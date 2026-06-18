@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Layout } from '../components/Layout';
-import { getUserFeedbackList, checkApiUsage, incrementApiUsage, showToast } from '../firebase';
+import { getUserFeedbackList, checkApiUsage, showToast } from '../firebase';
+import { generateSummaryCallable } from '../utils/apiClient';
 import * as Sentry from '@sentry/react';
 import { WeakAreaCard } from '../components/WeakAreaCard';
 import type { Feedback } from '../types';
@@ -77,58 +78,40 @@ export const SkillGapTracker: React.FC = () => {
       }
 
       const n = feedbackList.length;
-      const apiKey = localStorage.getItem('im_claude_key') || import.meta.env.VITE_ANTHROPIC_API_KEY || '';
-
-      if (apiKey) {
-        try {
-          if (user) {
-            await checkApiUsage(user.uid);
-          }
-          const userPrompt = `Based on these category-wise average scores over the last ${n} sessions: ${JSON.stringify(scoresByCategory)}, identify the user's top 2 weakest areas and suggest 3 specific topics to study for each. Return JSON with weak_areas (array of objects with category, avg_score, study_topics array).`;
-
-          const response = await fetch('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: {
-              'x-api-key': apiKey,
-              'anthropic-version': '2023-06-01',
-              'content-type': 'application/json',
-              'dangerously-allow-html-user-override': 'true'
-            } as any,
-            body: JSON.stringify({
-              model: 'claude-sonnet-4-20250514',
-              max_tokens: 1000,
-              messages: [{ role: 'user', content: userPrompt }],
-              system: "You identify candidate skill gaps. Respond ONLY with a valid JSON block containing: { \"weak_areas\": [ { \"category\": string, \"avg_score\": number, \"study_topics\": string[] } ] }."
-            })
-          });
-
-          if (response.ok) {
-            const responseData = await response.json();
-            
-            if (user) {
-              await incrementApiUsage(user.uid);
-            }
-
-            const jsonText = responseData.content[0].text;
-            const parsed = JSON.parse(jsonText.replace(/```json/g, '').replace(/```/g, '').trim());
-
-            if (parsed && Array.isArray(parsed.weak_areas)) {
-              const enriched = parsed.weak_areas.map((w: any) => ({
-                category: w.category,
-                avgScore: typeof w.avg_score === 'number' ? w.avg_score : parseFloat(w.avg_score) || 0,
-                topics: Array.isArray(w.study_topics) ? w.study_topics : [],
-              }));
-              setWeakAreas(enriched);
-              return;
-            }
-          }
-        } catch (err: any) {
-          console.warn('Claude API failed to fetch skill gaps, using local analysis fallback:', err);
-          Sentry.captureException(err, { tags: { feature: 'feedback-generation' } });
-          if (err.message && err.message.includes('limit reached')) {
-            showToast(err.message, 'error');
-          }
+      // Enforce server-side check and API usage increment
+      try {
+        if (user) {
+          await checkApiUsage(user.uid);
         }
+      } catch (err: any) {
+        showToast(err.message || "Daily AI usage limit reached, resets at midnight", "error");
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const response = await generateSummaryCallable({
+          type: 'weakness',
+          scoresByCategory,
+          n
+        });
+
+        const responseData: any = response.data;
+        const jsonText = responseData.content[0].text;
+        const parsed = JSON.parse(jsonText.replace(/```json/g, '').replace(/```/g, '').trim());
+
+        if (parsed && Array.isArray(parsed.weak_areas)) {
+          const enriched = parsed.weak_areas.map((w: any) => ({
+            category: w.category,
+            avgScore: typeof w.avg_score === 'number' ? w.avg_score : parseFloat(w.avg_score) || 0,
+            topics: Array.isArray(w.study_topics) ? w.study_topics : [],
+          }));
+          setWeakAreas(enriched);
+          return;
+        }
+      } catch (err: any) {
+        console.warn("Claude skill gap API failed, utilizing high fidelity simulation:", err);
+        Sentry.captureException(err, { tags: { feature: 'skill-tracker' } });
       }
 
       // Local fallback calculation if API fails or no key

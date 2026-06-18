@@ -12,6 +12,7 @@ import { NotFound } from './pages/NotFound';
 import { SkillGapTracker } from './pages/SkillGapTracker';
 import { SoloInterview } from './pages/SoloInterview';
 import { AdminDashboard } from './pages/AdminDashboard';
+import { JDAnalysis } from './pages/JDAnalysis';
 
 function App() {
   return (
@@ -87,6 +88,16 @@ function App() {
             element={
               <ProtectedRoute requireOnboarded={true}>
                 <SkillGapTracker />
+              </ProtectedRoute>
+            } 
+          />
+
+          {/* JD Analysis Route */}
+          <Route 
+            path="/jd-analysis" 
+            element={
+              <ProtectedRoute requireOnboarded={true}>
+                <JDAnalysis />
               </ProtectedRoute>
             } 
           />

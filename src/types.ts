@@ -126,3 +126,13 @@ export interface SoloSession {
   createdAt: any;
 }
 
+export interface JDAnalysisResult {
+  id?: string;
+  jdText: string;
+  matched_skills: string[];
+  missing_skills: string[];
+  weak_categories_for_this_role: string[];
+  recommendation: string;
+  createdAt: string;
+}
+
