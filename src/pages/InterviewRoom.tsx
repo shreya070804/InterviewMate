@@ -150,6 +150,13 @@ export const InterviewRoom: React.FC = () => {
   const [localVideoTrack, setLocalVideoTrack] = useState<ICameraVideoTrack | null>(null);
   const [localAudioTrack, setLocalAudioTrack] = useState<IMicrophoneAudioTrack | null>(null);
   const [remoteUsers, setRemoteUsers] = useState<any[]>([]);
+
+  // Network degradation & connection states
+  const [networkQuality, setNetworkQuality] = useState<{ uplink: number; downlink: number } | null>(null);
+  const [agoraConnectionState, setAgoraConnectionState] = useState<string>('DISCONNECTED');
+  const [isAudioOnlyDueToNetwork, setIsAudioOnlyDueToNetwork] = useState(false);
+  const [isReconnecting, setIsReconnecting] = useState(false);
+  const [reconnectTrigger, setReconnectTrigger] = useState(0);
   
   // Mock Video Fallback Streams (if no Agora App ID)
   const localVideoRef = useRef<HTMLVideoElement>(null);
@@ -423,6 +430,51 @@ export const InterviewRoom: React.FC = () => {
           setRemoteUsers(prev => prev.filter(u => u.uid !== remoteUser.uid));
         });
 
+        // Register event listeners for network monitoring and connection state
+        clientInstance.on('network-quality', async (stats) => {
+          const uplink = stats.uplinkNetworkQuality ?? 0;
+          const downlink = stats.downlinkNetworkQuality ?? 0;
+          setNetworkQuality({ uplink, downlink });
+
+          const isPoor = uplink >= 4 || downlink >= 4;
+          const isLost = uplink === 6 || downlink === 6;
+
+          if (isPoor && !isLost) {
+            setIsAudioOnlyDueToNetwork(true);
+            const localVideo = localTracks.find(t => t.trackMediaType === 'video');
+            if (localVideo && localVideo.enabled) {
+              await localVideo.setEnabled(false);
+              setCameraActive(false);
+            } else if (localVideoTrack && localVideoTrack.enabled) {
+              await localVideoTrack.setEnabled(false);
+              setCameraActive(false);
+            }
+            Sentry.captureMessage(`Agora Network Quality Degraded: uplink=${uplink}, downlink=${downlink}`, {
+              tags: { "network-degradation": "poor-quality" }
+            });
+          }
+        });
+
+        clientInstance.on('connection-state-change', (curState, _revState, reason) => {
+          setAgoraConnectionState(curState);
+          if (curState === 'RECONNECTING') {
+            setIsReconnecting(true);
+            Sentry.captureMessage(`Agora connection state: RECONNECTING (reason=${reason})`, {
+              tags: { "network-degradation": "reconnecting" }
+            });
+          } else if (curState === 'CONNECTED') {
+            setIsReconnecting(false);
+          } else if (curState === 'DISCONNECTED') {
+            setIsReconnecting(false);
+            Sentry.captureMessage(`Agora connection state: DISCONNECTED (reason=${reason})`, {
+              tags: { "network-degradation": "disconnect" }
+            });
+            setTimeout(() => {
+              setReconnectTrigger(prev => prev + 1);
+            }, 3000);
+          }
+        });
+
       } catch (err) {
         console.error("Agora setup failed, falling back to Local Camera Mockup:", err);
         setupLocalMockCamera();
@@ -460,7 +512,7 @@ export const InterviewRoom: React.FC = () => {
         cameraStream.getTracks().forEach(track => track.stop());
       }
     };
-  }, [sessionId, user]);
+  }, [sessionId, user, reconnectTrigger]);
 
   // Controls triggers
   const toggleMute = async () => {
@@ -481,6 +533,60 @@ export const InterviewRoom: React.FC = () => {
       cameraStream.getVideoTracks().forEach(t => t.enabled = !cameraActive);
     }
     setCameraActive(!cameraActive);
+  };
+
+  const handleManualRetryVideo = async () => {
+    setIsAudioOnlyDueToNetwork(false);
+    if (localVideoTrack) {
+      try {
+        await localVideoTrack.setEnabled(true);
+        setCameraActive(true);
+      } catch (err) {
+        console.error("Failed to enable video track:", err);
+      }
+    }
+    if (cameraStream) {
+      cameraStream.getVideoTracks().forEach(t => t.enabled = true);
+      setCameraActive(true);
+    }
+  };
+
+  // Mock connection degradation triggers for MOCK_MODE
+  const triggerMockPoorNetwork = async () => {
+    setNetworkQuality({ uplink: 4, downlink: 4 });
+    setIsAudioOnlyDueToNetwork(true);
+    if (localVideoTrack && localVideoTrack.enabled) {
+      await localVideoTrack.setEnabled(false);
+    }
+    if (cameraStream) {
+      cameraStream.getVideoTracks().forEach(t => t.enabled = false);
+    }
+    setCameraActive(false);
+    Sentry.captureMessage("Mock Network Quality Degraded: uplink=4, downlink=4", {
+      tags: { "network-degradation": "poor-quality" }
+    });
+  };
+
+  const triggerMockDisconnect = () => {
+    setNetworkQuality({ uplink: 6, downlink: 6 });
+    setAgoraConnectionState('DISCONNECTED');
+    Sentry.captureMessage("Mock Agora connection state: DISCONNECTED", {
+      tags: { "network-degradation": "disconnect" }
+    });
+  };
+
+  const triggerMockRestore = async () => {
+    setNetworkQuality({ uplink: 1, downlink: 1 });
+    setAgoraConnectionState('CONNECTED');
+    setIsAudioOnlyDueToNetwork(false);
+    setIsReconnecting(false);
+    if (localVideoTrack) {
+      await localVideoTrack.setEnabled(true);
+    }
+    if (cameraStream) {
+      cameraStream.getVideoTracks().forEach(t => t.enabled = true);
+    }
+    setCameraActive(true);
   };
 
   // Editor configuration
@@ -1037,6 +1143,10 @@ export const InterviewRoom: React.FC = () => {
 
   const activeQuestion = questions.find(q => q.id === session?.activeQuestionId);
 
+  const isConnectionLost = networkQuality?.uplink === 6 || networkQuality?.downlink === 6 || agoraConnectionState === 'DISCONNECTED' || agoraConnectionState === 'RECONNECTING' || isReconnecting;
+  const showConnectionLostBanner = isConnectionLost;
+  const showPoorConnectionBanner = isAudioOnlyDueToNetwork && !isConnectionLost;
+
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-[#0f172a] text-slate-100 font-sans">
       <a 
@@ -1125,8 +1235,61 @@ export const InterviewRoom: React.FC = () => {
         </div>
       </header>
 
+      {/* Banners Area */}
+      {showConnectionLostBanner && (
+        <div role="alert" className="bg-red-900/95 border-b border-red-700 text-red-100 text-xs font-bold py-2.5 px-4 flex items-center justify-center gap-2 z-50">
+          <span className="h-2 w-2 rounded-full bg-red-400 animate-ping"></span>
+          <span>Connection lost — trying to reconnect...</span>
+        </div>
+      )}
+
+      {showPoorConnectionBanner && (
+        <div role="alert" className="bg-amber-900/95 border-b border-amber-700 text-amber-100 text-xs font-bold py-2.5 px-4 flex items-center justify-between gap-4 z-50">
+          <div className="flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse"></span>
+            <span>Your connection is unstable — switched to audio-only to keep the call smooth</span>
+          </div>
+          <button
+            type="button"
+            onClick={handleManualRetryVideo}
+            className="inline-flex items-center gap-1 bg-amber-800 hover:bg-amber-700 text-white rounded px-2.5 py-1 text-[10px] font-bold cursor-pointer transition-colors focus:outline-none focus:ring-1 focus:ring-amber-500"
+          >
+            <RotateCw className="h-3 w-3" /> Retry Video
+          </button>
+        </div>
+      )}
+
       {/* CORE WORKSPACE GRID */}
       <main id="main-content" tabIndex={-1} className="flex flex-1 overflow-hidden relative focus:outline-none">
+        {/* Mock connection simulator panel */}
+        {MOCK_MODE && (
+          <div className="absolute top-4 left-4 z-40 bg-slate-900/95 border border-slate-700 rounded-lg p-2.5 flex flex-col gap-2 text-[10px] shadow-lg">
+            <span className="font-bold text-slate-400">Mock Network Simulator</span>
+            <div className="flex gap-2">
+              <button 
+                type="button"
+                onClick={triggerMockPoorNetwork} 
+                className="bg-amber-700 hover:bg-amber-600 px-2.5 py-1 rounded text-white cursor-pointer"
+              >
+                Simulate Poor Connection
+              </button>
+              <button 
+                type="button"
+                onClick={triggerMockDisconnect} 
+                className="bg-red-700 hover:bg-red-600 px-2.5 py-1 rounded text-white cursor-pointer"
+              >
+                Simulate Disconnect
+              </button>
+              <button 
+                type="button"
+                onClick={triggerMockRestore} 
+                className="bg-green-700 hover:bg-green-600 px-2.5 py-1 rounded text-white cursor-pointer"
+              >
+                Restore Connection
+              </button>
+            </div>
+          </div>
+        )}
         {/* Chat Sidebar slide-in panel */}
         {isChatOpen && (
           <aside role="complementary" aria-label="Room Chat" className="absolute right-0 top-0 bottom-0 z-30 w-80 border-l border-slate-800 bg-[#0f172a] flex flex-col shadow-2xl transition-all duration-350 ease-in-out">
