@@ -104,7 +104,7 @@ if (isFirebaseConfigured) {
 }
 
 export { firebaseFunctions };
-export const MOCK_MODE = !firebaseAuth || !firestoreDb;
+export const MOCK_MODE = !firebaseAuth || !firestoreDb || (typeof window !== 'undefined' && (window as any).__MOCK_MODE__) || (typeof globalThis !== 'undefined' && (globalThis as any).__MOCK_MODE__);
 
 // PRE-SEEDED QUESTIONS
 export const PRE_SEEDED_QUESTIONS: Question[] = [
@@ -868,7 +868,12 @@ export const getUserSoloSessions = async (userId: string): Promise<any[]> => {
   }
 };
 
-export const addToMatchmakingQueue = async (userId: string, topic: string, displayName: string): Promise<string> => {
+export const addToMatchmakingQueue = async (
+  userId: string, 
+  topic: string, 
+  displayName: string,
+  experienceLevel?: string
+): Promise<string> => {
   const queueId = Math.random().toString(36).substring(2, 11);
   const queueDoc = {
     id: queueId,
@@ -876,7 +881,8 @@ export const addToMatchmakingQueue = async (userId: string, topic: string, displ
     topic,
     status: 'waiting',
     createdAt: new Date().toISOString(),
-    sessionId: null
+    sessionId: null,
+    experienceLevel: experienceLevel || 'Student'
   };
 
   if (!MOCK_MODE) {
@@ -935,6 +941,8 @@ export const addToMatchmakingQueue = async (userId: string, topic: string, displ
         // Update queue doc
         userDoc.status = 'matched';
         userDoc.sessionId = sessionId;
+        userDoc.partnerName = 'Alex (AI Partner)';
+        userDoc.partnerExperienceLevel = experienceLevel || 'Student';
         currentQueue[queueId] = userDoc;
         setLocalData('im_matchmaking_queue', currentQueue);
         window.dispatchEvent(new Event('storage'));
@@ -1430,6 +1438,134 @@ export const subscribeToApiUsage = (userId: string, callback: (data: any) => voi
       window.removeEventListener('storage', checkUsage);
       clearInterval(intervalId);
     };
+  }
+};
+
+export const runCode = async (
+  userId: string,
+  code: string,
+  language: string
+): Promise<any> => {
+  if (code.length > 5000) {
+    throw new Error('Code submission exceeds the 5000 character limit.');
+  }
+
+  const isMock = MOCK_MODE || (typeof globalThis !== 'undefined' && (globalThis as any).__MOCK_MODE__) || (typeof window !== 'undefined' && (window as any).__MOCK_MODE__);
+  if (!isMock) {
+    const fn = httpsCallable(firebaseFunctions, 'runCode');
+    const result = await fn({ code, language });
+    return result.data;
+  } else {
+    // Mock Mode
+    const apiUsage = getLocalData('im_api_usage', {});
+    const now = new Date();
+    const currentHourStr = now.toISOString().substring(0, 13); // e.g. "2026-06-18T11"
+    
+    let userUsage = apiUsage[userId];
+    if (!userUsage) {
+      userUsage = {
+        claudeCallsToday: 0,
+        lastResetDate: now.toISOString().split('T')[0],
+        codeExecutionsThisHour: 0,
+        lastCodeExecutionHour: currentHourStr
+      };
+    }
+
+    if (!userUsage.codeExecutionsThisHour) {
+      userUsage.codeExecutionsThisHour = 0;
+    }
+    if (!userUsage.lastCodeExecutionHour) {
+      userUsage.lastCodeExecutionHour = currentHourStr;
+    }
+
+    let lastHourStr = userUsage.lastCodeExecutionHour.substring(0, 13);
+    if (lastHourStr !== currentHourStr) {
+      userUsage.codeExecutionsThisHour = 1;
+    } else {
+      userUsage.codeExecutionsThisHour += 1;
+    }
+    userUsage.lastCodeExecutionHour = currentHourStr;
+    apiUsage[userId] = userUsage;
+    setLocalData('im_api_usage', apiUsage);
+    window.dispatchEvent(new Event('storage'));
+
+    if (userUsage.codeExecutionsThisHour > 30) {
+      throw new Error('Execution limit reached, try again in a bit');
+    }
+
+    // Call Judge0 client-side in Mock Mode
+    const languageIdMap: { [key: string]: number } = {
+      javascript: 63,
+      python: 71,
+      java: 62,
+      cpp: 54
+    };
+
+    const apiKey = localStorage.getItem('im_judge0_key') || import.meta.env.VITE_JUDGE0_API_KEY || import.meta.env.VITE_RAPIDAPI_KEY || '';
+    if (apiKey) {
+      try {
+        const response = await fetch('https://judge0-ce.p.rapidapi.com/submissions?base64_encoded=true&wait=true', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-RapidAPI-Key': apiKey,
+            'X-RapidAPI-Host': 'judge0-ce.p.rapidapi.com',
+          },
+          body: JSON.stringify({
+            source_code: btoa(unescape(encodeURIComponent(code))),
+            language_id: languageIdMap[language] || 63,
+            stdin: '',
+            cpu_time_limit: 5,
+            memory_limit: 128000,
+            wall_time_limit: 10
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error('RapidAPI response failed');
+        }
+        return await response.json();
+      } catch (err) {
+        console.warn('Judge0 API failed in mock mode, falling back to simulation:', err);
+      }
+    }
+
+    // Local JS execution simulation fallback in mock mode
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        try {
+          if (language === 'javascript') {
+            const logBuffer: string[] = [];
+            const customConsole = {
+              log: (...args: any[]) => {
+                logBuffer.push(args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' '));
+              },
+              error: (...args: any[]) => {
+                logBuffer.push("[ERROR] " + args.join(' '));
+              }
+            };
+
+            const runFn = new Function('console', code);
+            runFn(customConsole);
+
+            resolve({
+              stdout: btoa(logBuffer.length > 0 ? logBuffer.join('\n') : 'Code executed successfully with no logs.'),
+              status: { id: 3, description: 'Accepted' }
+            });
+          } else {
+            resolve({
+              stdout: btoa(`[Execution Simulation for ${language.toUpperCase()}]\nCode executed successfully in mock local sandbox.\nReturned exit code 0.`),
+              status: { id: 3, description: 'Accepted' }
+            });
+          }
+        } catch (err: any) {
+          resolve({
+            stderr: btoa(err.message),
+            status: { id: 11, description: 'Runtime Error' }
+          });
+        }
+      }, 800);
+    });
   }
 };
 

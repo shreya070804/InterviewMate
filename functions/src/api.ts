@@ -1,5 +1,6 @@
-import * as admin from 'firebase-admin';
+
 import fetch from 'node-fetch';
+import * as functions from 'firebase-functions';
 
 // Fetch Claude API key from Functions config
 function getClaudeKey(): string {
@@ -34,8 +35,21 @@ export async function callClaude(messages: any[], model = 'claude-sonnet-4-20250
   return response.json();
 }
 
-export async function runJudge0(code: string, language: string) {
+export async function runJudge0(
+  code: string,
+  language: string,
+  options?: { cpu_time_limit?: number; memory_limit?: number; wall_time_limit?: number }
+) {
   const { host, apiKey } = getJudge0Config();
+  const body: any = {
+    source_code: Buffer.from(code).toString('base64'),
+    language_id: language,
+  };
+  if (options) {
+    if (options.cpu_time_limit !== undefined) body.cpu_time_limit = options.cpu_time_limit;
+    if (options.memory_limit !== undefined) body.memory_limit = options.memory_limit;
+    if (options.wall_time_limit !== undefined) body.wall_time_limit = options.wall_time_limit;
+  }
   const response = await fetch(`${host}/submissions?base64_encoded=true&wait=true`, {
     method: 'POST',
     headers: {
@@ -43,7 +57,7 @@ export async function runJudge0(code: string, language: string) {
       'x-rapidapi-key': apiKey,
       'x-rapidapi-host': host.replace('https://', ''),
     } as any,
-    body: JSON.stringify({ source_code: Buffer.from(code).toString('base64'), language_id: language }),
+    body: JSON.stringify(body),
   });
   if (!response.ok) {
     const txt = await response.text();

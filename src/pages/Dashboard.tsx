@@ -156,6 +156,8 @@ export const Dashboard: React.FC = () => {
   const [matchTimeLeft, setMatchTimeLeft] = useState(180); // 3 minutes in seconds
   const queueListenerRef = useRef<(() => void) | null>(null);
   const matchTimerRef = useRef<any>(null);
+  const [matchedPartnerName, setMatchedPartnerName] = useState<string | null>(null);
+  const [matchedPartnerExp, setMatchedPartnerExp] = useState<string | null>(null);
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -287,12 +289,15 @@ export const Dashboard: React.FC = () => {
     setIsMatching(true);
     setMatchingStatus('waiting');
     setMatchTimeLeft(180);
+    setMatchedPartnerName(null);
+    setMatchedPartnerExp(null);
 
     try {
       const qId = await addToMatchmakingQueue(
         user.uid, 
         matchTopic, 
-        profile?.displayName || user.displayName || 'Developer'
+        profile?.displayName || user.displayName || 'Developer',
+        profile?.experienceLevel || 'Student'
       );
       setQueueId(qId);
 
@@ -312,6 +317,8 @@ export const Dashboard: React.FC = () => {
       queueListenerRef.current = subscribeToQueueItem(qId, (data) => {
         if (data && data.status === 'matched') {
           clearInterval(matchTimerRef.current);
+          setMatchedPartnerName(data.partnerName || 'Practice Partner');
+          setMatchedPartnerExp(data.partnerExperienceLevel || '1-3 yrs');
           setMatchingStatus('matched');
           if (queueListenerRef.current) {
             queueListenerRef.current();
@@ -321,7 +328,7 @@ export const Dashboard: React.FC = () => {
           setTimeout(() => {
             setIsMatching(false);
             navigate(`/room/${data.sessionId}`);
-          }, 2000);
+          }, 4000);
         }
       });
     } catch (err) {
@@ -1366,7 +1373,13 @@ export const Dashboard: React.FC = () => {
 
                 <div className="space-y-1">
                   <h3 className="text-lg font-bold text-emerald-400">{t('matchmaker.partner_found')}</h3>
-                  <p className="text-xs text-slate-400">{t('matchmaker.creating_sandbox')}</p>
+                  <div className="mt-3 inline-flex flex-col items-center justify-center rounded-xl bg-slate-900 px-6 py-4 border border-slate-800">
+                    <span className="text-sm font-bold text-white">{matchedPartnerName}</span>
+                    <span className="mt-1.5 inline-block rounded-full bg-brand/20 px-2.5 py-0.5 text-2xs font-extrabold text-brand uppercase tracking-wider">
+                      Exp: {matchedPartnerExp}
+                    </span>
+                  </div>
+                  <p className="mt-4 text-xs text-slate-400">{t('matchmaker.creating_sandbox')}</p>
                 </div>
               </div>
             )}

@@ -1,6 +1,7 @@
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import { Resend } from 'resend';
+import { runJudge0 } from './api';
 
 admin.initializeApp();
 
@@ -24,72 +25,96 @@ export const matchmaker = functions.firestore
       const waitingUsers = querySnapshot.docs.filter(doc => doc.id !== snap.id);
 
       if (waitingUsers.length >= 1) {
-        const peerSnap = waitingUsers[0];
-        const peerData = peerSnap.data();
+        const myExp = data.experienceLevel || 'Student';
 
-        const userId1 = data.userId;
-        const userId2 = peerData.userId;
+        // 1. Try to find a peer with the same experience level
+        let peerSnap = waitingUsers.find(doc => (doc.data().experienceLevel || 'Student') === myExp);
 
-        // Fetch User Names
-        const user1Snap = await db.collection('users').doc(userId1).get();
-        const user2Snap = await db.collection('users').doc(userId2).get();
-        const name1 = user1Snap.exists ? (user1Snap.data()?.displayName || 'Peer A') : 'Peer A';
-        const name2 = user2Snap.exists ? (user2Snap.data()?.displayName || 'Peer B') : 'Peer B';
+        // 2. If no same-level match, fall back to anyone waiting > 60 seconds
+        if (!peerSnap) {
+          const now = Date.now();
+          peerSnap = waitingUsers.find(doc => {
+            const peerCreatedAt = doc.data().createdAt;
+            if (!peerCreatedAt) return false;
+            const peerTime = new Date(peerCreatedAt).getTime();
+            return (now - peerTime) >= 60000;
+          });
+        }
 
-        // Create a unique sessionId
-        const sessionId = Math.random().toString(36).substring(2, 7) + '-' + Math.random().toString(36).substring(2, 7);
-        const inviteLink = `https://${process.env.GCLOUD_PROJECT || 'interviewmate-demo-placeholder'}.web.app/room/${sessionId}`;
-        
-        const topicDetail = 
-          topic === 'DSA' ? 'Data Structures & Algorithms' : 
-          topic === 'System Design' ? 'System Design: Architecture' : 
-          topic === 'Frontend' ? 'Frontend Development' : 'HR & Behavioural';
+        if (peerSnap) {
+          const peerData = peerSnap.data();
 
-        const sessionDoc = {
-          id: sessionId,
-          topic,
-          topicDetail,
-          date: new Date().toISOString().split('T')[0],
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          duration: 45,
-          status: 'scheduled',
-          hostId: userId1,
-          hostName: name1,
-          guestId: userId2,
-          guestName: name2,
-          inviteLink,
-          code: '// Enter your solution here\n\nfunction solve() {\n  \n}',
-          language: 'javascript',
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          activeMode: 'code'
-        };
+          const userId1 = data.userId;
+          const userId2 = peerData.userId;
 
-        // Write batch update
-        const batch = db.batch();
-        batch.set(db.collection('sessions').doc(sessionId), sessionDoc);
-        batch.update(db.collection('matchmaking_queue').doc(snap.id), {
-          status: 'matched',
-          sessionId
-        });
-        batch.update(db.collection('matchmaking_queue').doc(peerSnap.id), {
-          status: 'matched',
-          sessionId
-        });
+          // Fetch User Names and Experience Levels
+          const user1Snap = await db.collection('users').doc(userId1).get();
+          const user2Snap = await db.collection('users').doc(userId2).get();
+          const name1 = user1Snap.exists ? (user1Snap.data()?.displayName || 'Peer A') : 'Peer A';
+          const name2 = user2Snap.exists ? (user2Snap.data()?.displayName || 'Peer B') : 'Peer B';
+          const exp1 = user1Snap.exists ? (user1Snap.data()?.experienceLevel || 'Student') : 'Student';
+          const exp2 = user2Snap.exists ? (user2Snap.data()?.experienceLevel || 'Student') : 'Student';
 
-        await batch.commit();
-        console.log(`Matched users ${userId1} and ${userId2} into session ${sessionId}`);
+          // Create a unique sessionId
+          const sessionId = Math.random().toString(36).substring(2, 7) + '-' + Math.random().toString(36).substring(2, 7);
+          const inviteLink = `https://${process.env.GCLOUD_PROJECT || 'interviewmate-demo-placeholder'}.web.app/room/${sessionId}`;
+          
+          const topicDetail = 
+            topic === 'DSA' ? 'Data Structures & Algorithms' : 
+            topic === 'System Design' ? 'System Design: Architecture' : 
+            topic === 'Frontend' ? 'Frontend Development' : 'HR & Behavioural';
 
-        // Deletion schedule fallback in 5 seconds
-        setTimeout(async () => {
-          try {
-            const delBatch = db.collection('matchmaking_queue');
-            await delBatch.doc(snap.id).delete();
-            await delBatch.doc(peerSnap.id).delete();
-            console.log(`Cleaned up matchmaking queue docs for session ${sessionId}`);
-          } catch (e) {
-            console.error('Error cleaning matchmaking documents:', e);
-          }
-        }, 5000);
+          const sessionDoc = {
+            id: sessionId,
+            topic,
+            topicDetail,
+            date: new Date().toISOString().split('T')[0],
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            duration: 45,
+            status: 'scheduled',
+            hostId: userId1,
+            hostName: name1,
+            guestId: userId2,
+            guestName: name2,
+            inviteLink,
+            code: '// Enter your solution here\n\nfunction solve() {\n  \n}',
+            language: 'javascript',
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            activeMode: 'code'
+          };
+
+          // Write batch update
+          const batch = db.batch();
+          batch.set(db.collection('sessions').doc(sessionId), sessionDoc);
+          batch.update(db.collection('matchmaking_queue').doc(snap.id), {
+            status: 'matched',
+            sessionId,
+            partnerName: name2,
+            partnerExperienceLevel: exp2
+          });
+          batch.update(db.collection('matchmaking_queue').doc(peerSnap.id), {
+            status: 'matched',
+            sessionId,
+            partnerName: name1,
+            partnerExperienceLevel: exp1
+          });
+
+          await batch.commit();
+          console.log(`Matched users ${userId1} and ${userId2} into session ${sessionId}`);
+
+          // Deletion schedule fallback in 5 seconds
+          const targetPeerId = peerSnap.id;
+          setTimeout(async () => {
+            try {
+              const delBatch = db.collection('matchmaking_queue');
+              await delBatch.doc(snap.id).delete();
+              await delBatch.doc(targetPeerId).delete();
+              console.log(`Cleaned up matchmaking queue docs for session ${sessionId}`);
+            } catch (e) {
+              console.error('Error cleaning matchmaking documents:', e);
+            }
+          }, 5000);
+        }
       }
     } catch (err) {
       console.error('Matchmaking trigger failed:', err);
@@ -623,5 +648,81 @@ export const incrementApiUsage = functions.https.onCall(async (data, context) =>
   });
   
   return { success: true };
+});
+
+export const runCode = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be logged in.');
+  }
+
+  const { code, language } = data;
+  if (!code || !language) {
+    throw new functions.https.HttpsError('invalid-argument', 'Missing code or language parameter.');
+  }
+
+  if (code.length > 5000) {
+    throw new functions.https.HttpsError('invalid-argument', 'Code submission exceeds the 5000 character limit.');
+  }
+
+  const uid = context.auth.uid;
+  const db = admin.firestore();
+  const docRef = db.collection('api_usage').doc(uid);
+  
+  const now = new Date();
+  const currentHourStr = now.toISOString().substring(0, 13); // e.g. "2026-06-18T11"
+
+  await db.runTransaction(async (transaction) => {
+    const docSnap = await transaction.get(docRef);
+    let codeExecutionsThisHour = 0;
+ 
+    if (docSnap.exists) {
+      const docData = docSnap.data();
+      codeExecutionsThisHour = docData?.codeExecutionsThisHour || 0;
+      const docLastHour = docData?.lastCodeExecutionHour;
+      
+      let lastHourStr = '';
+      if (docLastHour) {
+        if (typeof docLastHour.toDate === 'function') {
+          lastHourStr = docLastHour.toDate().toISOString().substring(0, 13);
+        } else if (docLastHour instanceof Date) {
+          lastHourStr = docLastHour.toISOString().substring(0, 13);
+        } else if (typeof docLastHour === 'string') {
+          lastHourStr = docLastHour.substring(0, 13);
+        }
+      }
+
+      if (lastHourStr !== currentHourStr) {
+        codeExecutionsThisHour = 1;
+      } else {
+        codeExecutionsThisHour += 1;
+      }
+    } else {
+      codeExecutionsThisHour = 1;
+    }
+
+    if (codeExecutionsThisHour > 30) {
+      throw new functions.https.HttpsError(
+        'resource-exhausted',
+        'Execution limit reached, try again in a bit'
+      );
+    }
+
+    transaction.set(docRef, {
+      codeExecutionsThisHour,
+      lastCodeExecutionHour: admin.firestore.Timestamp.fromDate(now)
+    }, { merge: true });
+  });
+
+  try {
+    const result = await runJudge0(code, language, {
+      cpu_time_limit: 5,
+      memory_limit: 128000,
+      wall_time_limit: 10
+    });
+    return result;
+  } catch (error: any) {
+    console.error('Judge0 execution error:', error);
+    throw new functions.https.HttpsError('internal', error.message || 'Failed to execute code.');
+  }
 });
 

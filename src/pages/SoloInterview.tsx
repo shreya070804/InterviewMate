@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { saveSoloSession, saveFeedback, checkApiUsage, incrementApiUsage, showToast } from '../firebase';
+import { saveSoloSession, saveFeedback, checkApiUsage, incrementApiUsage, showToast, runCode as firebaseRunCode } from '../firebase';
 import * as Sentry from '@sentry/react';
 import { Layout } from '../components/Layout';
 
@@ -375,113 +375,37 @@ export const SoloInterview: React.FC = () => {
     }, 80);
   };
 
-  // Run code via Judge0 API
+  // Run code via Judge0 API Cloud Function
   const runCode = async () => {
+    if (!user) return;
     setIsRunning(true);
     setLastOutput({ status: 'idle' });
 
-    const languageIdMap: { [key: string]: number } = {
-      javascript: 63,
-      python: 71,
-      java: 62,
-      cpp: 54
-    };
+    try {
+      const data = await firebaseRunCode(user.uid, code, language);
+      
+      const stdout = data.stdout ? atob(data.stdout) : '';
+      const stderr = data.stderr ? atob(data.stderr) : '';
+      const compileOutput = data.compile_output ? atob(data.compile_output) : '';
+      const statusId = data.status?.id;
 
-    const apiKey = localStorage.getItem('im_judge0_key') || import.meta.env.VITE_JUDGE0_API_KEY || import.meta.env.VITE_RAPIDAPI_KEY || '';
+      let status: 'success' | 'error' | 'compile_error' | 'timeout' = 'success';
+      if (statusId === 6) status = 'compile_error';
+      else if (statusId >= 7 && statusId <= 12) status = 'error';
+      else if (statusId === 5) status = 'timeout';
 
-    // Enforce 10s timeout abort
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => {
-      controller.abort();
+      setLastOutput({ stdout, stderr, compileOutput, status });
+    } catch (err: any) {
+      console.error(err);
+      const errMsg = err.message || 'Failed to execute code.';
+      showToast(errMsg, 'error');
       setLastOutput({
-        status: 'timeout',
-        stderr: 'Execution timed out (exceeded 10 seconds).'
+        status: 'error',
+        stderr: errMsg
       });
+    } finally {
       setIsRunning(false);
-    }, 10000);
-
-    if (apiKey) {
-      try {
-        const response = await fetch('https://judge0-ce.p.rapidapi.com/submissions?base64_encoded=true&wait=true', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-RapidAPI-Key': apiKey,
-            'X-RapidAPI-Host': 'judge0-ce.p.rapidapi.com',
-          },
-          signal: controller.signal,
-          body: JSON.stringify({
-            source_code: btoa(unescape(encodeURIComponent(code))),
-            language_id: languageIdMap[language] || 63,
-            stdin: ''
-          })
-        });
-
-        clearTimeout(timeoutId);
-
-        if (!response.ok) {
-          throw new Error('RapidAPI response failed');
-        }
-
-        const data = await response.json();
-        
-        const stdout = data.stdout ? atob(data.stdout) : '';
-        const stderr = data.stderr ? atob(data.stderr) : '';
-        const compileOutput = data.compile_output ? atob(data.compile_output) : '';
-        const statusId = data.status?.id;
-
-        let status: 'success' | 'error' | 'compile_error' | 'timeout' = 'success';
-        if (statusId === 6) status = 'compile_error';
-        else if (statusId >= 7 && statusId <= 12) status = 'error';
-        else if (statusId === 5) status = 'timeout';
-
-        setLastOutput({ stdout, stderr, compileOutput, status });
-        setIsRunning(false);
-        return;
-      } catch (err) {
-        clearTimeout(timeoutId);
-        console.warn('Judge0 API failed, falling back to local JS simulation:', err);
-        Sentry.captureException(err, { tags: { feature: 'code-execution' } });
-      }
     }
-
-    // Local JS execution fallback
-    setTimeout(() => {
-      clearTimeout(timeoutId);
-      try {
-        if (language === 'javascript') {
-          const logBuffer: string[] = [];
-          const customConsole = {
-            log: (...args: any[]) => {
-              logBuffer.push(args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' '));
-            },
-            error: (...args: any[]) => {
-              logBuffer.push("[ERROR] " + args.join(' '));
-            }
-          };
-
-          const runFn = new Function('console', code);
-          runFn(customConsole);
-
-          setLastOutput({
-            stdout: logBuffer.length > 0 ? logBuffer.join('\n') : 'Code executed successfully with no logs.',
-            status: 'success'
-          });
-        } else {
-          setLastOutput({
-            stdout: `[Execution Simulation for ${language.toUpperCase()}]\nCode executed successfully in mock local sandbox.\nReturned exit code 0.`,
-            status: 'success'
-          });
-        }
-      } catch (err: any) {
-        setLastOutput({
-          stderr: err.message,
-          status: 'error'
-        });
-      } finally {
-        setIsRunning(false);
-      }
-    }, 800);
   };
 
   // End Session

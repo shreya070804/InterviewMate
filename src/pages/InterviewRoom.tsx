@@ -15,7 +15,8 @@ import {
   subscribeToChatMessages,
   checkApiUsage,
   incrementApiUsage,
-  showToast
+  showToast,
+  runCode as firebaseRunCode
 } from '../firebase';
 import type { Session, Question, UserProfile } from '../types';
 import AgoraRTC from 'agora-rtc-sdk-ng';
@@ -518,9 +519,9 @@ export const InterviewRoom: React.FC = () => {
     }
   };
 
-  // Run Code via Judge0
+  // Run Code via Judge0 Cloud Function
   const runCode = async () => {
-    if (!sessionId) return;
+    if (!sessionId || !user) return;
     setIsRunning(true);
     
     // Sync idle status to session so both users see loading
@@ -528,118 +529,35 @@ export const InterviewRoom: React.FC = () => {
       lastOutput: { status: 'idle' }
     });
 
-    const languageIdMap: { [key: string]: number } = {
-      javascript: 63,
-      python: 71,
-      java: 62,
-      cpp: 54
-    };
+    try {
+      const data = await firebaseRunCode(user.uid, code, language);
+      
+      const stdout = data.stdout ? atob(data.stdout) : '';
+      const stderr = data.stderr ? atob(data.stderr) : '';
+      const compileOutput = data.compile_output ? atob(data.compile_output) : '';
+      const statusId = data.status?.id;
 
-    const apiKey = localStorage.getItem('im_judge0_key') || import.meta.env.VITE_JUDGE0_API_KEY || import.meta.env.VITE_RAPIDAPI_KEY || '';
+      let status: 'success' | 'error' | 'compile_error' | 'timeout' = 'success';
+      if (statusId === 6) status = 'compile_error';
+      else if (statusId >= 7 && statusId <= 12) status = 'error';
+      else if (statusId === 5) status = 'timeout';
 
-    // Enforce 10s Timeout AbortController signal
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => {
-      controller.abort();
+      updateSession(sessionId, {
+        lastOutput: { stdout, stderr, compileOutput, status }
+      });
+    } catch (err: any) {
+      console.error(err);
+      const errMsg = err.message || 'Failed to execute code.';
+      showToast(errMsg, 'error');
       updateSession(sessionId, {
         lastOutput: {
-          status: 'timeout',
-          stderr: 'Execution timed out (exceeded 10 seconds).'
+          status: 'error',
+          stderr: errMsg
         }
       });
+    } finally {
       setIsRunning(false);
-    }, 10000);
-
-    if (apiKey) {
-      try {
-        const response = await fetch('https://judge0-ce.p.rapidapi.com/submissions?base64_encoded=true&wait=true', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-RapidAPI-Key': apiKey,
-            'X-RapidAPI-Host': 'judge0-ce.p.rapidapi.com',
-          },
-          signal: controller.signal,
-          body: JSON.stringify({
-            source_code: btoa(unescape(encodeURIComponent(code))),
-            language_id: languageIdMap[language] || 63,
-            stdin: ''
-          })
-        });
-
-        clearTimeout(timeoutId);
-
-        if (!response.ok) {
-          throw new Error('RapidAPI response failed');
-        }
-
-        const data = await response.json();
-        
-        const stdout = data.stdout ? atob(data.stdout) : '';
-        const stderr = data.stderr ? atob(data.stderr) : '';
-        const compileOutput = data.compile_output ? atob(data.compile_output) : '';
-        const statusId = data.status?.id;
-
-        let status: 'success' | 'error' | 'compile_error' | 'timeout' = 'success';
-        if (statusId === 6) status = 'compile_error';
-        else if (statusId >= 7 && statusId <= 12) status = 'error';
-        else if (statusId === 5) status = 'timeout';
-
-        updateSession(sessionId, {
-          lastOutput: { stdout, stderr, compileOutput, status }
-        });
-        setIsRunning(false);
-        return;
-      } catch (err) {
-        clearTimeout(timeoutId);
-        console.warn('Judge0 API failed, utilizing local code execution simulator:', err);
-        Sentry.captureException(err, { tags: { feature: 'code-execution' } });
-      }
     }
-
-    // High fidelity simulator fallback
-    setTimeout(() => {
-      clearTimeout(timeoutId);
-      try {
-        if (language === 'javascript') {
-          const logBuffer: string[] = [];
-          const customConsole = {
-            log: (...args: any[]) => {
-              logBuffer.push(args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' '));
-            },
-            error: (...args: any[]) => {
-              logBuffer.push("[ERROR] " + args.join(' '));
-            }
-          };
-
-          const runFn = new Function('console', code);
-          runFn(customConsole);
-
-          updateSession(sessionId, {
-            lastOutput: {
-              stdout: logBuffer.length > 0 ? logBuffer.join('\n') : 'Code executed successfully with no logs.',
-              status: 'success'
-            }
-          });
-        } else {
-          updateSession(sessionId, {
-            lastOutput: {
-              stdout: `[Execution Simulation for ${language.toUpperCase()}]\nCode executed successfully in mock local sandbox.\nReturned exit code 0.`,
-              status: 'success'
-            }
-          });
-        }
-      } catch (err: any) {
-        updateSession(sessionId, {
-          lastOutput: {
-            stderr: err.message,
-            status: 'error'
-          }
-        });
-      } finally {
-        setIsRunning(false);
-      }
-    }, 800);
   };
 
   // Excalidraw Whiteboard Changes Synced Debounced
