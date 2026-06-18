@@ -14,7 +14,8 @@ import {
   subscribeToQueueItem,
   uploadAndParseResume,
   optInToLeaderboard,
-  getUserSoloSessions
+  getUserSoloSessions,
+  showToast
 } from '../firebase';
 import type { Session, Feedback } from '../types';
 import { 
@@ -99,8 +100,38 @@ export const Dashboard: React.FC = () => {
   const handleResumeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      showToast("File size must be under 5MB.", "error");
+      return;
+    }
+
     if (file.type !== 'application/pdf') {
-      alert("Please upload a PDF file.");
+      showToast("Please upload a PDF file.", "error");
+      return;
+    }
+
+    const isPdf = await new Promise<boolean>((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = (e) => {
+        if (!e.target || !e.target.result) {
+          resolve(false);
+          return;
+        }
+        const arr = new Uint8Array(e.target.result as ArrayBuffer);
+        if (arr.length < 4) {
+          resolve(false);
+          return;
+        }
+        const isMagicMatch = arr[0] === 0x25 && arr[1] === 0x50 && arr[2] === 0x44 && arr[3] === 0x46;
+        resolve(isMagicMatch);
+      };
+      reader.onerror = () => resolve(false);
+      reader.readAsArrayBuffer(file.slice(0, 4));
+    });
+
+    if (!isPdf) {
+      showToast("Uploaded file is not a valid PDF.", "error");
       return;
     }
 
@@ -122,7 +153,7 @@ export const Dashboard: React.FC = () => {
       }
     } catch (err) {
       console.error(err);
-      alert("Failed to parse and upload resume.");
+      showToast("Failed to parse and upload resume.", "error");
     } finally {
       setIsParsingResume(false);
     }

@@ -136,10 +136,26 @@ export const parseResume = functions.https.onCall(async (data, context) => {
 
   try {
     const pdfBuffer = Buffer.from(pdfBase64, 'base64');
+
+    // Re-validate magic bytes signature (%PDF)
+    if (pdfBuffer.length < 4 || pdfBuffer.toString('utf8', 0, 4) !== '%PDF') {
+      throw new functions.https.HttpsError('invalid-argument', 'Invalid PDF file signature.');
+    }
+
+    const uid = context.auth.uid;
+
+    // Store raw PDF in Firebase Storage under user's ownership path
+    const bucket = admin.storage().bucket();
+    const file = bucket.file(`resumes/${uid}/resume.pdf`);
+    await file.save(pdfBuffer, {
+      metadata: {
+        contentType: 'application/pdf',
+      }
+    });
+
     const parsedData = await pdf(pdfBuffer);
     const text = parsedData.text || '';
 
-    const uid = context.auth.uid;
     await admin.firestore().collection('users').doc(uid).set({
       resumeText: text
     }, { merge: true });
