@@ -35,10 +35,18 @@ export const SoloInterview: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const prefillQuestion = location.state?.prefillQuestion;
 
   // Mode: 'setup' | 'interview'
   const [mode, setMode] = useState<'setup' | 'interview'>('setup');
   const [topic, setTopic] = useState<'DSA' | 'System Design' | 'Frontend' | 'HR'>(() => {
+    const prefillQ = location.state?.prefillQuestion;
+    if (prefillQ?.category) {
+      const cat = prefillQ.category;
+      if (cat === 'DSA' || cat === 'System Design' || cat === 'Frontend' || cat === 'HR') {
+        return cat;
+      }
+    }
     const prefill = location.state?.prefillTopic;
     if (prefill === 'DSA' || prefill === 'System Design' || prefill === 'Frontend' || prefill === 'HR') {
       return prefill;
@@ -49,7 +57,16 @@ export const SoloInterview: React.FC = () => {
     if (prefill?.toLowerCase().includes('dsa')) return 'DSA';
     return 'DSA';
   });
-  const [difficulty, setDifficulty] = useState<'Easy' | 'Medium' | 'Hard'>('Medium');
+  const [difficulty, setDifficulty] = useState<'Easy' | 'Medium' | 'Hard'>(() => {
+    const prefillQ = location.state?.prefillQuestion;
+    if (prefillQ?.difficulty) {
+      const diff = prefillQ.difficulty;
+      if (diff === 'Easy' || diff === 'Medium' || diff === 'Hard') {
+        return diff;
+      }
+    }
+    return 'Medium';
+  });
   const [activeDifficulty, setActiveDifficulty] = useState<'Easy' | 'Medium' | 'Hard'>('Medium');
   const [difficultyTrend, setDifficultyTrend] = useState<'easier' | 'same' | 'harder' | 'initial'>('initial');
 
@@ -111,9 +128,14 @@ export const SoloInterview: React.FC = () => {
     setIsStreaming(true);
     setStreamingText('');
 
-    const initialSystemPrompt = `You are a strict but encouraging senior software engineer conducting a technical mock interview. Your name is Alex. Start by greeting the candidate, then ask one technical question based on the topic and difficulty provided. After the candidate responds, ask a relevant follow-up question or hint if they are stuck. When they submit their final code, evaluate it and give feedback. Keep responses concise — max 3 sentences per message.`;
+    const prefillQ = location.state?.prefillQuestion;
+    const initialSystemPrompt = prefillQ
+      ? `You are a strict but encouraging senior software engineer conducting a technical mock interview. Your name is Alex. You are interviewing the candidate specifically on this question: "${prefillQ.title}". Description: "${prefillQ.description}". Start by greeting the candidate, then ask this exact question first. After the candidate responds, ask a relevant follow-up question or hint if they are stuck. When they submit their final code, evaluate it and give feedback. Keep responses concise — max 3 sentences per message.`
+      : `You are a strict but encouraging senior software engineer conducting a technical mock interview. Your name is Alex. Start by greeting the candidate, then ask one technical question based on the topic and difficulty provided. After the candidate responds, ask a relevant follow-up question or hint if they are stuck. When they submit their final code, evaluate it and give feedback. Keep responses concise — max 3 sentences per message.`;
 
-    const initialUserMessage = `Hello Alex, I'm ready for my solo mock interview on Topic: ${topic} and Difficulty: ${difficulty}. Please introduce yourself and ask the first question.`;
+    const initialUserMessage = prefillQ
+      ? `Hello Alex, I'm ready for my solo mock interview on Topic: ${topic} and Difficulty: ${difficulty}. Please introduce yourself and ask the recommended question: "${prefillQ.title}" - "${prefillQ.description}"`
+      : `Hello Alex, I'm ready for my solo mock interview on Topic: ${topic} and Difficulty: ${difficulty}. Please introduce yourself and ask the first question.`;
 
     chatHistory.current = [
       { role: 'user', content: initialUserMessage }
@@ -278,12 +300,14 @@ export const SoloInterview: React.FC = () => {
   };
 
   const simulateChatStreaming = () => {
-    // Generate responses based on history count
     const historyCount = chatHistory.current.filter(h => h.role === 'user').length;
     let fullText = '';
 
     if (historyCount === 1) {
-      fullText = `Hi there! I'm Alex. Let's get started. I would like you to solve: "Write a function to find the length of the longest substring without repeating characters." Please code your solution and explain your thought process first.`;
+      const prefillQ = location.state?.prefillQuestion;
+      fullText = prefillQ
+        ? `Hi there! I'm Alex. Let's get started. I would like you to solve: "${prefillQ.title}". Here is the description: "${prefillQ.description}". Please code your solution and explain your thought process first.`
+        : `Hi there! I'm Alex. Let's get started. I would like you to solve: "Write a function to find the length of the longest substring without repeating characters." Please code your solution and explain your thought process first.`;
     } else if (historyCount === 2) {
       fullText = `That sounds like a solid starting idea. How do you plan to optimize the lookup time to O(N)? Consider using a sliding window technique. Write out some code and run it to test your logic.`;
     } else if (historyCount === 3) {
@@ -422,85 +446,108 @@ export const SoloInterview: React.FC = () => {
             </div>
 
             <div className="space-y-6">
-              {/* Topic Selector */}
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Interview Topic</label>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  {(['DSA', 'System Design', 'Frontend', 'HR'] as const).map((t, idx, arr) => (
-                    <button
-                      key={t}
-                      type="button"
-                      onClick={() => setTopic(t)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
-                          e.preventDefault();
-                          const nextIdx = (idx + 1) % arr.length;
-                          setTopic(arr[nextIdx]);
-                          const buttons = e.currentTarget.parentElement?.querySelectorAll('button');
-                          if (buttons && buttons[nextIdx]) {
-                            (buttons[nextIdx] as HTMLButtonElement).focus();
-                          }
-                        } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-                          e.preventDefault();
-                          const prevIdx = (idx - 1 + arr.length) % arr.length;
-                          setTopic(arr[prevIdx]);
-                          const buttons = e.currentTarget.parentElement?.querySelectorAll('button');
-                          if (buttons && buttons[prevIdx]) {
-                            (buttons[prevIdx] as HTMLButtonElement).focus();
-                          }
-                        }
-                      }}
-                      className={`rounded-xl py-3 text-xs font-bold border transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-brand focus:outline-none ${
-                        topic === t
-                          ? 'bg-brand border-brand text-white shadow-sm'
-                          : 'bg-slate-50 border-slate-200 text-slate-650 hover:bg-slate-100'
-                      }`}
-                    >
-                      {t}
-                    </button>
-                  ))}
+              {prefillQuestion && (
+                <div className="rounded-xl border border-indigo-200 dark:border-indigo-900 bg-indigo-50/50 dark:bg-indigo-950/20 p-4 text-left">
+                  <div className="flex justify-between items-center mb-1.5">
+                    <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest flex items-center gap-1">
+                      <Sparkles className="h-3 w-3 animate-pulse" /> Recommended Question
+                    </span>
+                    <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
+                      prefillQuestion.difficulty === 'Easy' ? 'bg-emerald-100 text-emerald-700' :
+                      prefillQuestion.difficulty === 'Medium' ? 'bg-amber-100 text-amber-700' :
+                      'bg-rose-100 text-rose-700'
+                    }`}>
+                      {prefillQuestion.difficulty}
+                    </span>
+                  </div>
+                  <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">{prefillQuestion.title}</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-3">{prefillQuestion.description}</p>
                 </div>
-              </div>
+              )}
+
+              {/* Topic Selector */}
+              {!prefillQuestion && (
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Interview Topic</label>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    {(['DSA', 'System Design', 'Frontend', 'HR'] as const).map((t, idx, arr) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setTopic(t)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+                            e.preventDefault();
+                            const nextIdx = (idx + 1) % arr.length;
+                            setTopic(arr[nextIdx]);
+                            const buttons = e.currentTarget.parentElement?.querySelectorAll('button');
+                            if (buttons && buttons[nextIdx]) {
+                              (buttons[nextIdx] as HTMLButtonElement).focus();
+                            }
+                          } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                            e.preventDefault();
+                            const prevIdx = (idx - 1 + arr.length) % arr.length;
+                            setTopic(arr[prevIdx]);
+                            const buttons = e.currentTarget.parentElement?.querySelectorAll('button');
+                            if (buttons && buttons[prevIdx]) {
+                              (buttons[prevIdx] as HTMLButtonElement).focus();
+                            }
+                          }
+                        }}
+                        className={`rounded-xl py-3 text-xs font-bold border transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-brand focus:outline-none ${
+                          topic === t
+                            ? 'bg-brand border-brand text-white shadow-sm'
+                            : 'bg-slate-50 border-slate-200 text-slate-650 hover:bg-slate-100'
+                        }`}
+                      >
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Difficulty Selector */}
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Difficulty Level</label>
-                <div className="grid grid-cols-3 gap-3">
-                  {(['Easy', 'Medium', 'Hard'] as const).map((d, idx, arr) => (
-                    <button
-                      key={d}
-                      type="button"
-                      onClick={() => setDifficulty(d)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
-                          e.preventDefault();
-                          const nextIdx = (idx + 1) % arr.length;
-                          setDifficulty(arr[nextIdx]);
-                          const buttons = e.currentTarget.parentElement?.querySelectorAll('button');
-                          if (buttons && buttons[nextIdx]) {
-                            (buttons[nextIdx] as HTMLButtonElement).focus();
+              {!prefillQuestion && (
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Difficulty Level</label>
+                  <div className="grid grid-cols-3 gap-3">
+                    {(['Easy', 'Medium', 'Hard'] as const).map((d, idx, arr) => (
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() => setDifficulty(d)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+                            e.preventDefault();
+                            const nextIdx = (idx + 1) % arr.length;
+                            setDifficulty(arr[nextIdx]);
+                            const buttons = e.currentTarget.parentElement?.querySelectorAll('button');
+                            if (buttons && buttons[nextIdx]) {
+                              (buttons[nextIdx] as HTMLButtonElement).focus();
+                            }
+                          } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                            e.preventDefault();
+                            const prevIdx = (idx - 1 + arr.length) % arr.length;
+                            setDifficulty(arr[prevIdx]);
+                            const buttons = e.currentTarget.parentElement?.querySelectorAll('button');
+                            if (buttons && buttons[prevIdx]) {
+                              (buttons[prevIdx] as HTMLButtonElement).focus();
+                            }
                           }
-                        } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-                          e.preventDefault();
-                          const prevIdx = (idx - 1 + arr.length) % arr.length;
-                          setDifficulty(arr[prevIdx]);
-                          const buttons = e.currentTarget.parentElement?.querySelectorAll('button');
-                          if (buttons && buttons[prevIdx]) {
-                            (buttons[prevIdx] as HTMLButtonElement).focus();
-                          }
-                        }
-                      }}
-                      className={`rounded-xl py-3 text-xs font-bold border transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-brand focus:outline-none ${
-                        difficulty === d
-                          ? 'bg-brand border-brand text-white shadow-sm'
-                          : 'bg-slate-50 border-slate-200 text-slate-650 hover:bg-slate-100'
-                      }`}
-                    >
-                      {d}
-                    </button>
-                  ))}
+                        }}
+                        className={`rounded-xl py-3 text-xs font-bold border transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-brand focus:outline-none ${
+                          difficulty === d
+                            ? 'bg-brand border-brand text-white shadow-sm'
+                            : 'bg-slate-50 border-slate-200 text-slate-650 hover:bg-slate-100'
+                        }`}
+                      >
+                        {d}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="pt-4 border-t border-slate-100 flex gap-4">
                 <button

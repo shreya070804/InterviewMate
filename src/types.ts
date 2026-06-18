@@ -109,6 +109,11 @@ export interface Feedback {
   time_complexity?: string;
   space_complexity?: string;
   complexity_explanation?: string;
+  nextRecommendation?: {
+    recommended_question_id?: string | null;
+    recommended_category?: 'DSA' | 'System Design' | 'Frontend' | 'HR' | null;
+    reason: string;
+  };
 }
 
 export interface SoloSession {

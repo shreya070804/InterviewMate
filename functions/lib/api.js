@@ -19,7 +19,7 @@ function getJudge0Config() {
         throw new Error('Judge0 API key not configured');
     return { host, apiKey };
 }
-async function callClaude(messages, model = 'claude-sonnet-4-20250514') {
+async function callClaude(messages, model = 'claude-sonnet-4-20250514', system = '', maxTokens = 1000) {
     const response = await (0, node_fetch_1.default)('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
@@ -28,7 +28,7 @@ async function callClaude(messages, model = 'claude-sonnet-4-20250514') {
             'content-type': 'application/json',
             'dangerously-allow-html-user-override': 'true',
         },
-        body: JSON.stringify({ model, max_tokens: 1000, messages, system: '' }),
+        body: JSON.stringify({ model, max_tokens: maxTokens, messages, system }),
     });
     if (!response.ok) {
         const txt = await response.text();

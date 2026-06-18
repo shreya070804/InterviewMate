@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import * as Sentry from '@sentry/react';
-import { getFeedback, saveFeedback, getQuestions, checkApiUsage, showToast } from '../firebase';
+import { getFeedback, saveFeedback, getQuestions, checkApiUsage, showToast, getUserFeedbackList, MOCK_MODE } from '../firebase';
 import { generateFeedbackCallable, generateSummaryCallable } from '../utils/apiClient';
 import { useAuth } from '../context/AuthContext';
-import type { Feedback } from '../types';
+import type { Feedback, Question } from '../types';
 import { parseClaudeResponse } from '../utils/claudeParser';
 import { Layout } from '../components/Layout';
 import { 
@@ -14,7 +14,9 @@ import {
   RotateCw, 
   Settings,
   Download,
-  Award
+  Award,
+  Sparkles,
+  Play
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -32,6 +34,14 @@ export const FeedbackDetails: React.FC = () => {
   const [generatingAI, setGeneratingAI] = useState(false);
   const [apiKeyInput, setApiKeyInput] = useState(ANTHROPIC_API_KEY);
   const [showKeyForm, setShowKeyForm] = useState(false);
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const recQuestion = feedback?.nextRecommendation?.recommended_question_id
+    ? questions.find(q => q.id === feedback.nextRecommendation?.recommended_question_id)
+    : null;
+
+  useEffect(() => {
+    getQuestions().then(setQuestions).catch(console.error);
+  }, []);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -44,8 +54,49 @@ export const FeedbackDetails: React.FC = () => {
           // Feedback already generated and exists
           setFeedback(data);
           setLoading(false);
+
+          let currentWeakest = 'DSA';
+          if (user) {
+            try {
+              const feedbacks = await getUserFeedbackList(user.uid);
+              const categoryTotals: Record<string, { total: number; count: number }> = {
+                'DSA': { total: 0, count: 0 },
+                'System Design': { total: 0, count: 0 },
+                'Frontend': { total: 0, count: 0 },
+                'HR': { total: 0, count: 0 }
+              };
+
+              feedbacks.forEach(f => {
+                const cat = getCategoryFromTopic(f.topic);
+                if (cat && f.scores) {
+                  const avgSession = (f.scores.correctness + f.scores.efficiency + f.scores.communication) / 3;
+                  categoryTotals[cat].total += avgSession;
+                  categoryTotals[cat].count += 1;
+                }
+              });
+
+              let minAvg = Infinity;
+              Object.entries(categoryTotals).forEach(([cat, info]) => {
+                if (info.count > 0) {
+                  const avg = info.total / info.count;
+                  if (avg < minAvg) {
+                    minAvg = avg;
+                    currentWeakest = cat;
+                  }
+                }
+              });
+            } catch (historyErr) {
+              console.error("Failed to load user history for weakest category calculation:", historyErr);
+            }
+          }
+
+          let latestFeedback = data;
           if (!data.sessionSummary) {
-            await handleGenerateSummary(data);
+            latestFeedback = await handleGenerateSummary(data);
+          }
+          
+          if (latestFeedback && !latestFeedback.nextRecommendation) {
+            await handleGenerateRecommendation(latestFeedback, currentWeakest);
           }
         } else if (data) {
           // Session code exists but feedback is empty, need to generate it
@@ -63,7 +114,7 @@ export const FeedbackDetails: React.FC = () => {
     };
 
     loadData();
-  }, [sessionId]);
+  }, [sessionId, user]);
 
   // AI Mocking Fallback Analyzer - inspects actual code to yield custom review reports
   const analyzeCodeLocally = (questionTitle: string, codeText: string, topicDetail: string): any => {
@@ -151,14 +202,176 @@ export const FeedbackDetails: React.FC = () => {
     };
   };
 
+  const getCategoryFromTopic = (topic: string): 'DSA' | 'System Design' | 'Frontend' | 'HR' | null => {
+    const t = topic.toLowerCase();
+    if (t.includes('dsa') || t.includes('data structure') || t.includes('algorithm')) return 'DSA';
+    if (t.includes('system design') || t.includes('architecture')) return 'System Design';
+    if (t.includes('frontend') || t.includes('web') || t.includes('ui')) return 'Frontend';
+    if (t.includes('hr') || t.includes('behavioral') || t.includes('communication')) return 'HR';
+    return null;
+  };
+
+  const computeFallbackRecommendation = (category: string, _scores: any, weakest: string, questionsList: Question[]) => {
+    let matchedQ = questionsList.find(q => q.category === weakest);
+    if (!matchedQ) {
+      matchedQ = questionsList.find(q => q.category === category);
+    }
+
+    if (matchedQ) {
+      return {
+        recommended_question_id: matchedQ.id,
+        recommended_category: null,
+        reason: `Practice ${matchedQ.title} to strengthen your understanding in the ${matchedQ.category} domain.`
+      };
+    } else {
+      return {
+        recommended_question_id: null,
+        recommended_category: (weakest || category || 'DSA') as any,
+        reason: `No matched questions were found in the question bank. Focus on improving your overall skills in the ${weakest || category || 'DSA'} domain.`
+      };
+    }
+  };
+
+  const handleGenerateRecommendation = async (currentFeedback: Feedback, weakest: string) => {
+    let availableQs = questions;
+    if (availableQs.length === 0) {
+      try {
+        availableQs = await getQuestions();
+      } catch (err) {
+        console.error("Failed to load questions in recommendation:", err);
+      }
+    }
+
+    const availableQuestionsList = availableQs.map(q => ({
+      id: q.id,
+      title: q.title,
+      category: q.category,
+      difficulty: q.difficulty
+    }));
+
+    const category = getCategoryFromTopic(currentFeedback.topic) || 'DSA';
+    const apiKey = localStorage.getItem('im_claude_key') || import.meta.env.VITE_ANTHROPIC_API_KEY || '';
+
+    let nextRecommendation: any = null;
+
+    if (apiKey && !MOCK_MODE) {
+      try {
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+            'content-type': 'application/json',
+            'dangerously-allow-html-user-override': 'true'
+          } as any,
+          body: JSON.stringify({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 1000,
+            messages: [
+              {
+                role: 'user',
+                content: `Based on this session's performance — category: ${category}, scores: correctness ${currentFeedback.scores.correctness}/10, efficiency ${currentFeedback.scores.efficiency}/10, communication ${currentFeedback.scores.communication}/10 — and this candidate's weakest area being ${weakest}, recommend exactly one specific question from this list that would help them improve the most: ${JSON.stringify(availableQuestionsList)}. If no good match exists in the question bank, return recommended_question_id as null, and return the recommended_category (one of: 'DSA', 'System Design', 'Frontend', 'HR') instead. Return JSON with: recommended_question_id, recommended_category, reason (1 sentence explaining why this question or category was chosen).`
+              }
+            ],
+            system: "You are an expert software engineering mentor. Respond ONLY with a valid JSON block containing: recommended_question_id (string or null), recommended_category (string or null), reason (string)."
+          })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const cleanJson = data.content[0].text.replace(/```json/g, '').replace(/```/g, '').trim();
+          const parsed = JSON.parse(cleanJson);
+          nextRecommendation = {
+            recommended_question_id: parsed.recommended_question_id || null,
+            recommended_category: parsed.recommended_category || null,
+            reason: parsed.reason || 'Focus on practicing mock coding questions.'
+          };
+        } else {
+          throw new Error('Direct Claude recommend call failed');
+        }
+      } catch (err) {
+        console.warn("Direct Claude recommendation failed, calling Firebase function / fallback:", err);
+      }
+    }
+
+    if (!nextRecommendation) {
+      try {
+        const response = await generateSummaryCallable({
+          type: 'recommendation',
+          category,
+          scores: currentFeedback.scores,
+          weakestCategoryFromHistory: weakest,
+          availableQuestionsList
+        });
+        const responseData: any = response.data;
+        const jsonText = responseData.content[0].text;
+        const parsed = JSON.parse(jsonText.replace(/```json/g, '').replace(/```/g, '').trim());
+        nextRecommendation = {
+          recommended_question_id: parsed.recommended_question_id || null,
+          recommended_category: parsed.recommended_category || null,
+          reason: parsed.reason || 'Practice related mock interview questions.'
+        };
+      } catch (err) {
+        console.warn("Cloud function recommendation failed, using offline fallback:", err);
+        nextRecommendation = computeFallbackRecommendation(category, currentFeedback.scores, weakest, availableQs);
+      }
+    }
+
+    const updated: Feedback = {
+      ...currentFeedback,
+      nextRecommendation
+    };
+
+    await saveFeedback(updated);
+    setFeedback(updated);
+  };
+
+  const triggerSummaryAndRecommendation = async (finalizedFeedback: Feedback) => {
+    const summaryUpdated = await handleGenerateSummary(finalizedFeedback);
+    let currentWeakest = 'DSA';
+    if (user) {
+      try {
+        const feedbacks = await getUserFeedbackList(user.uid);
+        const categoryTotals: Record<string, { total: number; count: number }> = {
+          'DSA': { total: 0, count: 0 },
+          'System Design': { total: 0, count: 0 },
+          'Frontend': { total: 0, count: 0 },
+          'HR': { total: 0, count: 0 }
+        };
+
+        feedbacks.forEach(f => {
+          const cat = getCategoryFromTopic(f.topic);
+          if (cat && f.scores) {
+            const avgSession = (f.scores.correctness + f.scores.efficiency + f.scores.communication) / 3;
+            categoryTotals[cat].total += avgSession;
+            categoryTotals[cat].count += 1;
+          }
+        });
+
+        let minAvg = Infinity;
+        Object.entries(categoryTotals).forEach(([cat, info]) => {
+          if (info.count > 0) {
+            const avg = info.total / info.count;
+            if (avg < minAvg) {
+              minAvg = avg;
+              currentWeakest = cat;
+            }
+          }
+        });
+      } catch (historyErr) {
+        console.error("Failed to load user history for weakest category calculation:", historyErr);
+      }
+    }
+    await handleGenerateRecommendation(summaryUpdated || finalizedFeedback, currentWeakest);
+  };
+
   const handleGenerateFeedback = async (currentFeedback: Feedback) => {
     setGeneratingAI(true);
     
-    // Get question description if available
     let questionText = "General mock interview";
     try {
       const qList = await getQuestions();
-      const sessionData = await getFeedback(sessionId || ''); // read full code snapshot
+      const sessionData = await getFeedback(sessionId || ''); 
       const codeSnippet = sessionData?.codeSnippet || currentFeedback.codeSnippet || '';
       
       const qMatch = qList.find(q => q.title.toLowerCase().includes(currentFeedback.topic.split(' ')[0].toLowerCase()));
@@ -168,7 +381,6 @@ export const FeedbackDetails: React.FC = () => {
 
       const codeString = codeSnippet || '// No code written';
 
-      // Enforce server-side check and API usage increment
       try {
         if (user) {
           await checkApiUsage(user.uid);
@@ -206,15 +418,13 @@ export const FeedbackDetails: React.FC = () => {
         setFeedback(finalized);
         setGeneratingAI(false);
         setLoading(false);
-        // Auto generate summary
-        await handleGenerateSummary(finalized);
+        await triggerSummaryAndRecommendation(finalized);
         return;
       } catch (apiErr) {
         console.warn("Anthropic API failed. Utilizing High-Fidelity Local AI Fallback Analyzer.", apiErr);
         Sentry.captureException(apiErr, { tags: { feature: 'feedback-generation' } });
       }
 
-      // LOCAL FALLBACK MODE
       const localResult = analyzeCodeLocally(
         qMatch ? qMatch.title : currentFeedback.topic, 
         codeString, 
@@ -235,7 +445,7 @@ export const FeedbackDetails: React.FC = () => {
 
       await saveFeedback(finalizedLocal);
       setFeedback(finalizedLocal);
-      await handleGenerateSummary(finalizedLocal);
+      await triggerSummaryAndRecommendation(finalizedLocal);
 
     } catch (err) {
       console.error("Failed to run AI analysis:", err);
@@ -245,7 +455,7 @@ export const FeedbackDetails: React.FC = () => {
     }
   };
 
-  const handleGenerateSummary = async (currentFeedback: Feedback) => {
+  const handleGenerateSummary = async (currentFeedback: Feedback): Promise<Feedback> => {
     let questionText = "General mock interview";
     try {
       const qList = await getQuestions();
@@ -257,14 +467,13 @@ export const FeedbackDetails: React.FC = () => {
 
     const codeSnippet = currentFeedback.codeSnippet || '// No code written';
 
-    // Enforce server-side check and API usage increment
     try {
       if (user) {
         await checkApiUsage(user.uid);
       }
     } catch (err: any) {
       showToast(err.message || "Daily AI usage limit reached, resets at midnight", "error");
-      return;
+      return currentFeedback;
     }
 
     try {
@@ -291,7 +500,7 @@ export const FeedbackDetails: React.FC = () => {
 
       await saveFeedback(updated);
       setFeedback(updated);
-      return;
+      return updated;
     } catch (err) {
       console.warn("Claude summary API failed, using local fallback", err);
       Sentry.captureException(err, { tags: { feature: 'feedback-generation' } });
@@ -313,6 +522,7 @@ export const FeedbackDetails: React.FC = () => {
 
     await saveFeedback(updatedLocal);
     setFeedback(updatedLocal);
+    return updatedLocal;
   };
 
   const handleDownloadPDF = async () => {
@@ -603,6 +813,70 @@ export const FeedbackDetails: React.FC = () => {
                     </div>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* Next Recommendation Card */}
+            {feedback.nextRecommendation && (
+              <div className="rounded-2xl border border-indigo-200 dark:border-indigo-950 bg-indigo-50/5 dark:bg-indigo-950/10 p-6 shadow-sm space-y-4">
+                <div className="flex items-center gap-2 border-b border-indigo-100 dark:border-indigo-950/50 pb-3">
+                  <Sparkles className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+                  <h3 className="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider">What to practice next</h3>
+                </div>
+
+                {recQuestion ? (
+                  <div className="space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-xs">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
+                            recQuestion.difficulty === 'Easy' ? 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-450' :
+                            recQuestion.difficulty === 'Medium' ? 'bg-amber-100 dark:bg-amber-950/40 text-amber-705 dark:text-amber-450' :
+                            'bg-rose-100 dark:bg-rose-950/40 text-rose-700 dark:text-rose-450'
+                          }`}>
+                            {recQuestion.difficulty}
+                          </span>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                            {recQuestion.category}
+                          </span>
+                        </div>
+                        <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200">{recQuestion.title}</h4>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2">{recQuestion.description}</p>
+                      </div>
+                      <button
+                        onClick={() => navigate('/solo', { state: { prefillQuestion: recQuestion } })}
+                        className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-750 text-white px-4 py-2 text-xs font-bold transition-all cursor-pointer shrink-0 self-start sm:self-center focus-visible:ring-2 focus-visible:ring-indigo-550 focus:outline-none"
+                      >
+                        <Play className="h-3.5 w-3.5 fill-current" /> Practice this now
+                      </button>
+                    </div>
+                    <p className="text-xs text-slate-600 dark:text-slate-350 leading-relaxed font-medium">
+                      <span className="font-bold text-indigo-600 dark:text-indigo-400">Why this was chosen:</span> {feedback.nextRecommendation.reason}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-xs">
+                      <div>
+                        <span className="inline-flex rounded-full bg-indigo-100 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider">
+                          Focus Area
+                        </span>
+                        <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200 mt-1.5">
+                          Domain: {feedback.nextRecommendation.recommended_category || 'General Skills'}
+                        </h4>
+                      </div>
+                      <button
+                        onClick={() => navigate('/solo', { state: { prefillTopic: feedback.nextRecommendation?.recommended_category || 'DSA' } })}
+                        className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-indigo-650 hover:bg-indigo-750 text-white px-4 py-2 text-xs font-bold transition-all cursor-pointer shrink-0 self-start sm:self-center focus-visible:ring-2 focus-visible:ring-indigo-550 focus:outline-none"
+                      >
+                        <Play className="h-3.5 w-3.5 fill-current" /> Practice this now
+                      </button>
+                    </div>
+                    <p className="text-xs text-slate-600 dark:text-slate-350 leading-relaxed font-medium">
+                      <span className="font-bold text-indigo-600 dark:text-indigo-400">Recommendation:</span> {feedback.nextRecommendation.reason}
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 

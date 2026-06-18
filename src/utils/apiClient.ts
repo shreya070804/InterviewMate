@@ -92,6 +92,21 @@ const simulateSummary = async (data: any) => {
         }]
       }
     };
+  } else if (data.type === 'recommendation') {
+    const recommendedId = data.availableQuestionsList && data.availableQuestionsList.length > 0
+      ? data.availableQuestionsList[0].id
+      : null;
+    return {
+      data: {
+        content: [{
+          text: JSON.stringify({
+            recommended_question_id: recommendedId,
+            recommended_category: recommendedId ? null : (data.weakestCategoryFromHistory || 'DSA'),
+            reason: "Based on your scores, practicing this question will help optimize your approach and timing."
+          })
+        }]
+      }
+    };
   } else {
     return {
       data: {

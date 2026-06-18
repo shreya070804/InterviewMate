@@ -1495,40 +1495,50 @@ export const runCode = async (
 
     // In mock mode, we use local JS execution simulation fallback to avoid client-side API calls.
 
+    const isTest = typeof globalThis !== 'undefined' && (globalThis as any).process?.env?.VITEST === 'true';
+
+    const executeSimulation = () => {
+      try {
+        if (language === 'javascript') {
+          const logBuffer: string[] = [];
+          const customConsole = {
+            log: (...args: any[]) => {
+              logBuffer.push(args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' '));
+            },
+            error: (...args: any[]) => {
+              logBuffer.push("[ERROR] " + args.join(' '));
+            }
+          };
+
+          const runFn = new Function('console', code);
+          runFn(customConsole);
+
+          return {
+            stdout: btoa(logBuffer.length > 0 ? logBuffer.join('\n') : 'Code executed successfully with no logs.'),
+            status: { id: 3, description: 'Accepted' }
+          };
+        } else {
+          return {
+            stdout: btoa(`[Execution Simulation for ${language.toUpperCase()}]\nCode executed successfully in mock local sandbox.\nReturned exit code 0.`),
+            status: { id: 3, description: 'Accepted' }
+          };
+        }
+      } catch (err: any) {
+        return {
+          stderr: btoa(err.message),
+          status: { id: 11, description: 'Runtime Error' }
+        };
+      }
+    };
+
+    if (isTest) {
+      return executeSimulation();
+    }
+
     // Local JS execution simulation fallback in mock mode
     return new Promise((resolve) => {
       setTimeout(() => {
-        try {
-          if (language === 'javascript') {
-            const logBuffer: string[] = [];
-            const customConsole = {
-              log: (...args: any[]) => {
-                logBuffer.push(args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' '));
-              },
-              error: (...args: any[]) => {
-                logBuffer.push("[ERROR] " + args.join(' '));
-              }
-            };
-
-            const runFn = new Function('console', code);
-            runFn(customConsole);
-
-            resolve({
-              stdout: btoa(logBuffer.length > 0 ? logBuffer.join('\n') : 'Code executed successfully with no logs.'),
-              status: { id: 3, description: 'Accepted' }
-            });
-          } else {
-            resolve({
-              stdout: btoa(`[Execution Simulation for ${language.toUpperCase()}]\nCode executed successfully in mock local sandbox.\nReturned exit code 0.`),
-              status: { id: 3, description: 'Accepted' }
-            });
-          }
-        } catch (err: any) {
-          resolve({
-            stderr: btoa(err.message),
-            status: { id: 11, description: 'Runtime Error' }
-          });
-        }
+        resolve(executeSimulation());
       }, 800);
     });
   }

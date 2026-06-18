@@ -894,6 +894,16 @@ export const generateSummary = functions.https.onCall(async (data, context) => {
       const system = "You identify candidate skill gaps. Respond ONLY with a valid JSON block containing: { \"weak_areas\": [ { \"category\": string, \"avg_score\": number, \"study_topics\": string[] } ] }.";
       
       result = await callClaude(messages, 'claude-sonnet-4-20250514', system, 1000);
+    } else if (type === 'recommendation') {
+      const { category, scores: recScores, weakestCategoryFromHistory, availableQuestionsList } = data;
+      if (!category || !recScores || !weakestCategoryFromHistory || !availableQuestionsList) {
+        throw new functions.https.HttpsError('invalid-argument', 'Missing fields for recommendation.');
+      }
+      const userPrompt = `Based on this session's performance — category: ${category}, scores: correctness ${recScores.correctness}/10, efficiency ${recScores.efficiency}/10, communication ${recScores.communication}/10 — and this candidate's weakest area being ${weakestCategoryFromHistory}, recommend exactly one specific question from this list that would help them improve the most: ${JSON.stringify(availableQuestionsList)}. If no good match exists in the question bank, return recommended_question_id as null, and return the recommended_category (one of: 'DSA', 'System Design', 'Frontend', 'HR') instead. Return JSON with: recommended_question_id, recommended_category, reason (1 sentence explaining why this question or category was chosen).`;
+      const messages = [{ role: 'user', content: userPrompt }];
+      const system = "You are an expert software engineering mentor. Respond ONLY with a valid JSON block containing: recommended_question_id (string or null), recommended_category (string or null), reason (string).";
+      
+      result = await callClaude(messages, 'claude-sonnet-4-20250514', system, 1000);
     } else {
       if (!questionText || !codeSnippet || !scores) {
         throw new functions.https.HttpsError('invalid-argument', 'Missing questionText, codeSnippet, or scores.');
